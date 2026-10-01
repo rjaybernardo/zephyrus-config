@@ -2017,159 +2017,128 @@ vim.keymap.set(
 -- 9. LOCAL LLM / VECTORCODE / CODECOMPANION
 -- ==========================================================================
 
-local function vectorcode_rag_prompt(
-    message,
-    _,
-    context
-)
+-- Find the project root: nearest folder with .vectorcode, else .git, else cwd.
+local function vectorcode_project_root()
+	local start = vim.api.nvim_buf_get_name(0)
+
+	if start == "" or vim.bo.buftype ~= "" then
+		start = vim.fn.getcwd()
+	end
+
+	local found = vim.fs.root(start, { ".vectorcode" })
+	    or vim.fs.root(start, { ".git" })
+	    or vim.fn.getcwd()
+
+	return (vim.fn.fnamemodify(found, ":p"):gsub("/$", ""))
+end
+
+
+local function vectorcode_rag_prompt(message)
 	local marker = "RAG:"
 
-	if not message:find(
-		    marker,
-		    1,
-		    true
-	    ) then
+	if not message:find(marker, 1, true) then
 		return message
 	end
 
-	local query =
-	    vim.trim(
-		    message:gsub(
-			    "^%s*"
-			    .. vim.pesc(marker)
-			    .. "%s*",
-			    "",
-			    1
-		    )
-	    )
+	local query = vim.trim((
+		message:gsub("^%s*" .. vim.pesc(marker) .. "%s*", "", 1)
+	))
 
 	if query == "" then
 		return message
 	end
 
-	local project_root =
-	    vim.fn.getcwd()
-
-	if context then
-		project_root =
-		    context.project_root
-		    or context.cwd
-		    or project_root
-	end
-
-	project_root =
-	    vim.fn.fnamemodify(
-		    project_root,
-		    ":p"
-	    ):gsub("/$", "")
-
-	local result = vim.system(
-		{
-			"vectorcode",
-			"--project_root",
-			project_root,
-			"query",
-			query,
-		},
-		{
-			cwd = project_root,
-			text = true,
-		}
-	):wait()
-
-	if result.code ~= 0 then
-		local stderr =
-		    vim.trim(
-			    result.stderr or ""
-		    )
-
+	if vim.fn.executable("vectorcode") ~= 1 then
 		vim.notify(
-			"VectorCode query failed\n"
-			.. "Directory: "
-			.. project_root
-			.. "\n"
-			.. (
-				stderr ~= ""
-				and stderr
-				or "Unknown error"
-			),
+			"vectorcode is not on PATH.",
 			vim.log.levels.ERROR,
-			{
-				title = "CodeCompanion RAG",
-			}
+			{ title = "CodeCompanion RAG" }
 		)
 
-		return table.concat(
-			{
-				"RAG FAILED.",
-				"VectorCode could not query the repository.",
-				"",
-				"USER QUESTION: "
-				.. query,
-			},
-			"\n"
-		)
+		return "RAG FAILED. VectorCode is not installed.\n\nUSER QUESTION: " .. query
 	end
 
-	local retrieved =
-	    vim.trim(
-		    result.stdout or ""
-	    )
+	local project_root = vectorcode_project_root()
 
-	vim.notify(
-		"RAG DEBUG: VectorCode returned "
-		.. tostring(#retrieved)
-		.. " characters",
-		vim.log.levels.INFO,
-		{
-			title = "CodeCompanion RAG",
-		}
-	)
+	local ok, result = pcall(function()
+		return vim.system(
+			{
+				"vectorcode",
+				"--project_root",
+				project_root,
+				"--no_stderr",
+				"query",
+				"-n",
+				"5",
+				query,
+			},
+			{
+				cwd = project_root,
+				text = true,
+			}
+		):wait(120000)
+	end)
 
-	if retrieved == "" then
+	if not ok or not result then
 		vim.notify(
-			"No VectorCode results found.\nProject: "
-			.. project_root,
-			vim.log.levels.WARN,
-			{
-				title = "CodeCompanion RAG",
-			}
+			"VectorCode could not be started:\n" .. tostring(result),
+			vim.log.levels.ERROR,
+			{ title = "CodeCompanion RAG" }
 		)
 
-		return table.concat(
-			{
-				"RAG returned no indexed repository context.",
-				"",
-				"USER QUESTION: "
-				.. query,
-			},
-			"\n"
+		return "RAG FAILED. VectorCode could not query the repository.\n\nUSER QUESTION: " .. query
+	end
+
+	local retrieved = vim.trim(result.stdout or "")
+
+	-- VectorCode can segfault on exit AFTER printing valid results,
+	-- so only treat a non-zero exit as failure when nothing came back.
+	if retrieved == "" then
+		if result.code ~= 0 then
+			local stderr = vim.trim(result.stderr or "")
+
+			vim.notify(
+				"VectorCode query failed (exit "
+				.. tostring(result.code)
+				.. ")\nProject: "
+				.. project_root
+				.. (stderr ~= "" and ("\n" .. stderr) or ""),
+				vim.log.levels.ERROR,
+				{ title = "CodeCompanion RAG" }
+			)
+
+			return "RAG FAILED. VectorCode could not query the repository.\n\nUSER QUESTION: " .. query
+		end
+
+		vim.notify(
+			"No VectorCode results.\nProject: "
+			.. project_root
+			.. "\nRun llm-rag-index in that folder.",
+			vim.log.levels.WARN,
+			{ title = "CodeCompanion RAG" }
 		)
+
+		return "RAG returned no indexed repository context.\n\nUSER QUESTION: " .. query
 	end
 
 	vim.notify(
-		"RAG retrieved repository context",
+		"RAG retrieved " .. tostring(#retrieved) .. " characters of context",
 		vim.log.levels.INFO,
-		{
-			title = "CodeCompanion RAG",
-		}
+		{ title = "CodeCompanion RAG" }
 	)
 
-	return table.concat(
-		{
-			"RAG REPOSITORY CONTEXT",
-			"======================",
-			"Use the following retrieved repository context as the source of truth.",
-			"Do not invent repository facts that are not present below.",
-			"",
-			retrieved,
-			"",
-			"USER QUESTION",
-			"=============",
-			query,
-		},
-		"\n"
-	)
+	return table.concat({
+		"RAG REPOSITORY CONTEXT",
+		"======================",
+		"Use the following retrieved repository context as the source of truth.",
+		"Do not invent repository facts that are not present below.",
+		"",
+		retrieved,
+		"",
+		"USER QUESTION",
+		"=============",
+		query,
+	}, "\n")
 end
 
 
@@ -2193,6 +2162,23 @@ require("codecompanion").setup({
 
 		inline = {
 			layout = "vertical",
+		},
+	},
+
+	rules = {
+		project = {
+			description = "Project instructions and current project context",
+			files = {
+				"AGENTS.md",
+				".agent_context.md",
+			},
+		},
+		opts = {
+			chat = {
+				autoload = "project",
+				enabled = true,
+				autoload_groups_in_prompt_library = true,
+			},
 		},
 	},
 
@@ -2264,7 +2250,7 @@ require("codecompanion").setup({
 			adapter = "ollama_agent",
 
 			system_prompt = function(_)
-				local base_prompt = [[
+				return [[
 You are an expert Senior Software Engineer and Code Repair Assistant.
 
 Rules:
@@ -2277,34 +2263,9 @@ Rules:
 - If missing context prevents an accurate fix, explicitly ask for the missing definitions.
 - When the user message begins with "RAG:", use ONLY the retrieved repository context supplied in that message.
 - Do not invent repository facts when RAG context is present.
+- Treat AGENTS.md and .agent_context.md loaded as CodeCompanion rules as project-specific source material.
+- If a project fact is not supported by the loaded rules, retrieved RAG context, or the actual files/tools available in the chat, say that it is not confirmed instead of inventing it.
 ]]
-
-				local agents_file = vim.fn.getcwd() .. "/AGENTS.md"
-				local context_file = vim.fn.getcwd() .. "/.agent_context.md"
-
-				local instructions = {}
-
-				if vim.fn.filereadable(agents_file) == 1 then
-					table.insert(
-						instructions,
-						"### Project Instructions\n"
-						.. table.concat(vim.fn.readfile(agents_file), "\n")
-					)
-				end
-
-				if vim.fn.filereadable(context_file) == 1 then
-					table.insert(
-						instructions,
-						"### Current Project Context\n"
-						.. table.concat(vim.fn.readfile(context_file), "\n")
-					)
-				end
-
-				if #instructions > 0 then
-					return base_prompt .. "\n\n" .. table.concat(instructions, "\n\n")
-				end
-
-				return base_prompt
 			end,
 
 			tools = {
