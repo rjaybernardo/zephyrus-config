@@ -198,6 +198,11 @@ alias ai-off="systemctl stop ollama"
 alias ai-restart="systemctl restart ollama"
 alias ai-status="systemctl status ollama --no-pager"
 
+# CPU boost (off = cooler: AI answers ~69°C vs 92°C, -3% speed; see system/cpu-boost)
+alias boost-off='echo 0 | sudo tee /sys/devices/system/cpu/cpufreq/boost >/dev/null && echo "boost OFF (cool)"'
+alias boost-on='echo 1 | sudo tee /sys/devices/system/cpu/cpufreq/boost >/dev/null && echo "boost ON (fast, hot) — boost-off when done"'
+alias boost-status='[[ $(cat /sys/devices/system/cpu/cpufreq/boost) == 1 ]] && echo "boost ON" || echo "boost OFF"'
+
 alias ollama-list="ollama list"
 alias ollama-ps="ollama ps"
 

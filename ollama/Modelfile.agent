@@ -4,6 +4,9 @@ PARAMETER temperature 0.2
 # Keep Qwen3.5's default presence_penalty (1.5): at 0 it fell into endless
 # repetition loops. Cap answer length so a runaway answer can't hang the editor.
 PARAMETER num_predict 4096
+# The model runs fully on the GPU; the default 8 CPU threads only spin
+# (~450% CPU vs ~100%, same tok/s)
+PARAMETER num_thread 2
 PARAMETER num_ctx 32768
 
 SYSTEM """
