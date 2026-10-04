@@ -1,0 +1,5 @@
+root = true
+
+# This config is written with tabs; keep it that way despite expandtab.
+[*.lua]
+indent_style = tab
