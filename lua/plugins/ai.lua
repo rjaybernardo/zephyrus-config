@@ -456,17 +456,6 @@ Rules:
 		http = {
 			ollama_agent = ollama_adapter("Qwen3.5 Agent", 0.2),
 			ollama_inline = ollama_adapter("Qwen3.5 Inline", 0.1),
-
-			minicpm = function()
-				return require("codecompanion.adapters").extend("openai", {
-					name = "minicpm",
-					env = {
-						url = "http://127.0.0.1:8000/v1",
-						api_key = "dummy",
-					},
-					schema = { model = { default = "openbmb/MiniCPM5-1B" } },
-				})
-			end,
 		},
 	},
 })

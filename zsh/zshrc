@@ -4,7 +4,7 @@
 # Shell prompt: Starship
 # System info: Minimal Fastfetch
 # Desktop: Niri / Wayland
-# AI: Ollama + Qwen + VectorCode + Aider + MiniCPM/vLLM
+# AI: Ollama + Qwen + VectorCode + Aider
 # =========================================================
 
 
@@ -374,8 +374,7 @@ ai-ctx-copy() {
 #   llm-rag-status     -> see what is indexed
 #   llm-rag-reset      -> wipe + rebuild (after changing config)
 #
-# db_url uses port 8100 so VectorCode never collides with
-# vLLM / MiniCPM, which runs on port 8000.
+# db_url uses port 8100 (Chroma server, vectorcode-chroma.service).
 #
 # NOTE: VectorCode can segfault on exit AFTER doing its work.
 # These functions check the output, not the exit code.
@@ -913,63 +912,6 @@ EOF
     rm -f "$context_file" "${context_file}.rg" "${context_file}.vector"
 
     return $exit_code
-}
-
-
-# =========================================================
-# MINICPM5 / VLLM
-# =========================================================
-
-minicpm-on() {
-    if [[ ! -d "$HOME/vllm-env" ]]; then
-        echo "vLLM environment not found:"
-        echo "$HOME/vllm-env"
-        return 1
-    fi
-
-    source "$HOME/vllm-env/bin/activate"
-
-    if ! command -v vllm >/dev/null 2>&1; then
-        echo "vLLM command not found."
-        return 1
-    fi
-
-    vllm serve openbmb/MiniCPM5-1B \
-        --host 127.0.0.1 \
-        --port 8000 \
-        --dtype bfloat16 \
-        --max-model-len 8192 \
-        --gpu-memory-utilization 0.30
-}
-
-
-# =========================================================
-# AIDER — MINICPM
-# =========================================================
-
-aider-mini() {
-    local context_files=()
-
-    if [[ -f "AGENTS.md" ]]; then
-        context_files+=(--read "AGENTS.md")
-    elif [[ -f "agents.md" ]]; then
-        context_files+=(--read "agents.md")
-    fi
-
-    if [[ -f "context.md" ]]; then
-        context_files+=(--read "context.md")
-    fi
-
-    AIDER_MODEL="" \
-    OLLAMA_API_BASE="" \
-    OPENAI_BASE_URL="" \
-    OPENAI_API_KEY="" \
-    aider \
-        --openai-api-key "dummy" \
-        --openai-api-base "http://127.0.0.1:8000/v1" \
-        --model "openai/openbmb/MiniCPM5-1B" \
-        "${context_files[@]}" \
-        "$@"
 }
 
 
