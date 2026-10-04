@@ -1,0 +1,13 @@
+[Unit]
+Description=ChromaDB server for VectorCode (port 8100)
+After=network.target
+
+[Service]
+WorkingDirectory=/home/rjaybernardo/.local/share/vectorcode/chroma-server
+Environment=ANONYMIZED_TELEMETRY=False
+ExecStart=/home/rjaybernardo/.local/share/uv/tools/vectorcode/bin/chroma run --host 127.0.0.1 --port 8100 --path /home/rjaybernardo/.local/share/vectorcode/chroma-server
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,1316 @@
+# =========================================================
+# CACHYOS + NIRI ZSH CONFIGURATION
+# =========================================================
+# Shell prompt: Starship
+# System info: Minimal Fastfetch
+# Desktop: Niri / Wayland
+# AI: Ollama + Qwen + VectorCode + Aider + MiniCPM/vLLM
+# =========================================================
+
+
+# =========================================================
+# ZSH HISTORY
+# =========================================================
+
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+
+setopt APPEND_HISTORY
+setopt INC_APPEND_HISTORY
+setopt SHARE_HISTORY
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_REDUCE_BLANKS
+setopt AUTO_CD
+setopt EXTENDED_GLOB
+
+
+# =========================================================
+# COMPLETION
+# =========================================================
+
+autoload -Uz compinit
+compinit -C
+
+autoload -Uz up-line-or-beginning-search
+autoload -Uz down-line-or-beginning-search
+
+zle -N up-line-or-beginning-search
+zle -N down-line-or-beginning-search
+
+bindkey '^[[A' up-line-or-beginning-search
+bindkey '^[[B' down-line-or-beginning-search
+
+
+# =========================================================
+# EDITOR / ENVIRONMENT
+# =========================================================
+
+export EDITOR="nvim"
+export VISUAL="nvim"
+export PAGER="bat"
+
+
+# =========================================================
+# PATH
+# =========================================================
+
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+
+if [[ -f "$HOME/.local/bin/env" ]]; then
+    source "$HOME/.local/bin/env"
+fi
+
+
+# =========================================================
+# FNM — FAST NODE MANAGER
+# =========================================================
+
+FNM_PATH="$HOME/.local/share/fnm"
+
+if [[ -d "$FNM_PATH" ]]; then
+    export PATH="$FNM_PATH:$PATH"
+
+    if command -v fnm >/dev/null 2>&1; then
+        eval "$(fnm env --shell zsh)"
+    fi
+fi
+
+
+# =========================================================
+# MODERN CLI REPLACEMENTS
+# =========================================================
+
+if command -v eza >/dev/null 2>&1; then
+    alias ls="eza --icons=always --group-directories-first"
+    alias ll="eza -lh --icons=always --group-directories-first"
+    alias la="eza -a --icons=always --group-directories-first"
+    alias lt="eza --tree --level=2 --icons=always"
+    alias tree="eza --tree --level=3 --icons=always"
+fi
+
+if command -v bat >/dev/null 2>&1; then
+    alias cat="bat --style=plain"
+fi
+
+# NOTE: grep is NOT aliased to rg — rg has different flags
+# (e.g. rg -E means encoding), which breaks normal grep usage.
+# Use `rg` directly when you want ripgrep.
+
+alias cls="clear"
+alias ..="cd .."
+alias ...="cd ../.."
+alias v="nvim"
+
+
+# =========================================================
+# GIT SHORTCUTS
+# =========================================================
+
+alias gs="git status"
+alias ga="git add"
+alias gc="git commit"
+alias gp="git push"
+alias gl="git log --oneline --graph --decorate"
+
+
+# =========================================================
+# SAMSUNG DEX / SCRCPY
+# =========================================================
+
+if command -v scrcpy >/dev/null 2>&1; then
+    alias dex='scrcpy --new-display=1920x1080/160 --start-app=com.sec.android.app.dex/com.sec.android.app.dex.DexHome --video-codec=h264 --max-fps=60 --mouse=sdk'
+fi
+
+
+# =========================================================
+# ZOXIDE
+# =========================================================
+
+if command -v zoxide >/dev/null 2>&1; then
+    eval "$(zoxide init zsh)"
+fi
+
+alias 'z..'='cd ..'
+alias 'z...'='cd ../..'
+
+
+# =========================================================
+# ZSH AUTOSUGGESTIONS
+# =========================================================
+
+if [[ -f /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]]; then
+    source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+fi
+
+
+# =========================================================
+# STARSHIP
+# =========================================================
+
+if command -v starship >/dev/null 2>&1; then
+    eval "$(starship init zsh)"
+fi
+
+
+# =========================================================
+# LOCAL AI — OLLAMA
+# =========================================================
+
+# Qwen Agent is used for:
+# - Aider
+# - CodeCompanion Chat
+# - project-level reasoning
+#
+# Qwen Inline is used by Neovim/CodeCompanion for:
+# - inline edits
+# - quick transformations
+# - short coding tasks
+
+export AI_MODEL="qwen2.5-agent"
+
+# Keep frequently used models loaded longer.
+export OLLAMA_KEEP_ALIVE="1h"
+
+# Local Ollama server.
+export OLLAMA_HOST="127.0.0.1:11434"
+export OLLAMA_API_BASE="http://127.0.0.1:11434"
+
+
+# =========================================================
+# OPENAI-COMPATIBLE OLLAMA API
+# =========================================================
+
+export OPENAI_BASE_URL="http://127.0.0.1:11434/v1"
+export OPENAI_API_KEY="ollama"
+export OPENAI_MODEL="$AI_MODEL"
+
+
+# =========================================================
+# OLLAMA SYSTEM CONTROL
+# =========================================================
+
+alias ai-on="systemctl start ollama"
+alias ai-off="systemctl stop ollama"
+alias ai-restart="systemctl restart ollama"
+alias ai-status="systemctl status ollama --no-pager"
+
+alias ollama-list="ollama list"
+alias ollama-ps="ollama ps"
+
+
+# =========================================================
+# OLLAMA GPU STATUS
+# =========================================================
+
+ollama-gpu() {
+    echo "============================================================"
+    echo "OLLAMA"
+    echo "============================================================"
+
+    if command -v ollama >/dev/null 2>&1; then
+        ollama ps
+    else
+        echo "Ollama is not installed."
+    fi
+
+    echo
+    echo "============================================================"
+    echo "NVIDIA GPU"
+    echo "============================================================"
+
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        nvidia-smi \
+            --query-gpu=name,memory.used,memory.total,utilization.gpu \
+            --format=csv,noheader
+    else
+        echo "nvidia-smi not found."
+    fi
+}
+
+
+# =========================================================
+# OLLAMA SYSTEMD OPTIMIZATION
+# =========================================================
+# Ollama is managed by systemd, so server-side variables belong
+# in the systemd service rather than only in .zshrc.
+
+ai-optimize-service() {
+    sudo mkdir -p /etc/systemd/system/ollama.service.d || return 1
+
+    sudo tee /etc/systemd/system/ollama.service.d/override.conf >/dev/null <<'EOF'
+[Service]
+Environment="OLLAMA_FLASH_ATTENTION=1"
+Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
+Environment="OLLAMA_NUM_PARALLEL=1"
+Environment="OLLAMA_MAX_LOADED_MODELS=2"
+Environment="OLLAMA_CONTEXT_LENGTH=16384"
+Environment="OLLAMA_KEEP_ALIVE=1h"
+EOF
+
+    sudo systemctl daemon-reload || return 1
+    sudo systemctl restart ollama || return 1
+
+    echo
+    echo "Ollama service optimization applied."
+    echo
+    echo "Verify with:"
+    echo "systemctl show ollama -p Environment"
+}
+
+
+# =========================================================
+# QWEN SHORTCUTS
+# =========================================================
+
+alias qwen="ollama run qwen2.5-agent"
+alias qwen-inline="ollama run qwen2.5-inline"
+
+
+# =========================================================
+# NEOVIM / CODECOMPANION
+# =========================================================
+
+alias nvim-chat="nvim +CodeCompanionChat"
+
+
+# =========================================================
+# AI PROJECT AGENTS
+# =========================================================
+
+ai-init-agents() {
+    if [[ -f "AGENTS.md" ]]; then
+        echo "AGENTS.md already exists in current folder."
+        return 0
+    fi
+
+    cat > AGENTS.md <<'EOF'
+# Project Guidelines for AI Assistant
+
+- **Architecture:** Write clean, modular, production-ready code.
+- **Code Style:** Follow local repo conventions and strict typing.
+- **Testing:** Include core edge cases when generating functions.
+EOF
+
+    echo "Created AGENTS.md template for CodeCompanion."
+}
+
+
+# =========================================================
+# AI PROJECT CONTEXT
+# =========================================================
+
+ai-ctx() {
+    local target_dir="${1:-.}"
+
+    echo "--- PROJECT CONTEXT ---"
+
+    if command -v eza >/dev/null 2>&1; then
+        eza \
+            --tree \
+            --level=4 \
+            --color=never \
+            --icons=never \
+            --git-ignore \
+            "$target_dir"
+
+    elif command -v tree >/dev/null 2>&1; then
+        tree \
+            -L 4 \
+            -I 'node_modules|.git|.next|dist|build' \
+            "$target_dir"
+
+    else
+        find "$target_dir" \
+            -maxdepth 4 \
+            -type f \
+            | sort
+    fi
+}
+
+
+ai-ctx-copy() {
+    local target_dir="${1:-.}"
+
+    if command -v wl-copy >/dev/null 2>&1; then
+        ai-ctx "$target_dir" | wl-copy
+
+    elif command -v xclip >/dev/null 2>&1; then
+        ai-ctx "$target_dir" | xclip -selection clipboard
+
+    else
+        echo "Clipboard utility not found."
+        echo "Install with:"
+        echo "sudo pacman -S wl-clipboard"
+        return 1
+    fi
+
+    echo "Context for '$target_dir' copied to clipboard!" >&2
+}
+
+
+# =========================================================
+# VECTORCODE RAG
+# =========================================================
+# One-time setup on this laptop:
+#   llm-rag-install    -> installs VectorCode with working dependencies
+#   rag-db-setup       -> standalone ChromaDB server on port 8100
+#
+# One-time setup per project (run anywhere inside the repo):
+#   llm-rag-config     -> writes .vectorcode/config.json + include list
+#   llm-rag-index      -> builds the index
+#
+# Daily use:
+#   llm-rag-query how are products fetched
+#   llm-rag-index      -> re-run after big code changes
+#   llm-rag-status     -> see what is indexed
+#   llm-rag-reset      -> wipe + rebuild (after changing config)
+#
+# db_url uses port 8100 so VectorCode never collides with
+# vLLM / MiniCPM, which runs on port 8000.
+#
+# NOTE: VectorCode can segfault on exit AFTER doing its work.
+# These functions check the output, not the exit code.
+
+# Project root = nearest folder with .vectorcode, else git root, else $PWD.
+_rag_root() {
+    local dir="$PWD"
+
+    while [[ "$dir" != "/" ]]; do
+        [[ -d "$dir/.vectorcode" ]] && { print -r -- "$dir"; return 0; }
+        dir="${dir:h}"
+    done
+
+    git rev-parse --show-toplevel 2>/dev/null || print -r -- "$PWD"
+}
+
+# ---------------------------------------------------------
+# STANDALONE CHROMADB SERVER (port 8100)
+# ---------------------------------------------------------
+# VectorCode's bundled database server crashes mid-indexing
+# ("httpx.ConnectError: All connection attempts failed").
+# A standalone ChromaDB 0.6.3 server fixes that.
+# Run once:  rag-db-setup
+# It then starts automatically at login (systemd user service).
+
+_RAG_DB_URL="http://127.0.0.1:8100"
+_RAG_DB_DIR="$HOME/.local/share/vectorcode/chroma-server"
+_RAG_DB_UNIT="vectorcode-chroma.service"
+
+_rag_db_up() {
+    curl -fsS --max-time 2 "$_RAG_DB_URL/api/v1/heartbeat" >/dev/null 2>&1
+}
+
+rag-db-setup() {
+    local chroma_bin="$HOME/.local/share/uv/tools/vectorcode/bin/chroma"
+
+    # Prefer the chroma that ships inside VectorCode's own environment,
+    # so client and server are the exact same version.
+    if [[ ! -x "$chroma_bin" ]]; then
+        echo "chroma not found in VectorCode's environment, installing chromadb 0.6.3..."
+        uv tool install "chromadb==0.6.3" --python 3.12 || return 1
+        chroma_bin=$(command -v chroma) || { echo "chroma install failed."; return 1; }
+    fi
+
+    mkdir -p "$HOME/.config/systemd/user" "$_RAG_DB_DIR"
+
+    command cat > "$HOME/.config/systemd/user/$_RAG_DB_UNIT" <<EOF
+[Unit]
+Description=ChromaDB server for VectorCode (port 8100)
+After=network.target
+
+[Service]
+WorkingDirectory=$_RAG_DB_DIR
+Environment=ANONYMIZED_TELEMETRY=False
+ExecStart=$chroma_bin run --host 127.0.0.1 --port 8100 --path $_RAG_DB_DIR
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+EOF
+
+    systemctl --user daemon-reload
+    systemctl --user enable --now "$_RAG_DB_UNIT" || return 1
+
+    echo -n "Waiting for ChromaDB on port 8100"
+    for _ in {1..30}; do
+        _rag_db_up && { echo; echo "✅ ChromaDB server is running."; return 0; }
+        echo -n "."
+        sleep 1
+    done
+
+    echo
+    echo "❌ ChromaDB did not start. Logs:"
+    journalctl --user -u "$_RAG_DB_UNIT" -n 30 --no-pager
+    return 1
+}
+
+alias rag-db-status="systemctl --user status $_RAG_DB_UNIT --no-pager"
+alias rag-db-restart="systemctl --user restart $_RAG_DB_UNIT"
+alias rag-db-logs="journalctl --user -u $_RAG_DB_UNIT -n 50 --no-pager"
+
+# ---------------------------------------------------------
+# VECTORCODE INSTALL / REPAIR
+# ---------------------------------------------------------
+# tree-sitter-language-pack 1.x throws DownloadError for unknown
+# languages (e.g. 'transact-sql'), which crashes VectorCode's
+# indexing. 0.x bundles all parsers and works with VectorCode.
+# tree-sitter 0.26 is newer than those parsers and segfaults,
+# so it is pinned to 0.25.x.
+
+llm-rag-install() {
+    uv tool install --reinstall "vectorcode<1.0.0" \
+        --python 3.12 \
+        --with "tree-sitter-language-pack<1" \
+        --with "tree-sitter>=0.25.1,<0.26" || return 1
+
+    # The ChromaDB service runs from VectorCode's environment.
+    systemctl --user restart "$_RAG_DB_UNIT" 2>/dev/null
+
+    echo
+    echo "✅ VectorCode installed: $(vectorcode version 2>/dev/null)"
+    echo "   tree-sitter-language-pack: $(_rag_tslp_version)"
+    echo "   tree-sitter: $(_rag_pkg_version tree-sitter)"
+}
+
+_rag_pkg_version() {
+    "$HOME/.local/share/uv/tools/vectorcode/bin/python" -c \
+        "import importlib.metadata as m; print(m.version('$1'))" \
+        2>/dev/null
+}
+
+_rag_tslp_version() {
+    "$HOME/.local/share/uv/tools/vectorcode/bin/python" -c \
+        "import importlib.metadata as m; print(m.version('tree-sitter-language-pack'))" \
+        2>/dev/null
+}
+
+_rag_check() {
+    if ! command -v vectorcode >/dev/null 2>&1; then
+        echo "VectorCode is not installed."
+        echo "Install: uv tool install \"vectorcode<1.0.0\" --python 3.12"
+        return 1
+    fi
+
+    if ! curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+        echo "Ollama is not running. Run: ai-on"
+        return 1
+    fi
+
+    local tslp
+    tslp=$(_rag_tslp_version)
+    if [[ "$tslp" == <1->.* ]]; then
+        echo "tree-sitter-language-pack $tslp breaks VectorCode indexing."
+        echo "Run once: llm-rag-install"
+        return 1
+    fi
+
+    local ts
+    ts=$(_rag_pkg_version tree-sitter)
+    if [[ "$ts" == 0.<26->.* || "$ts" == <1->.* ]]; then
+        echo "Note: tree-sitter $ts may crash VectorCode. Fix: llm-rag-install"
+    fi
+
+    if ! _rag_db_up; then
+        if systemctl --user cat "$_RAG_DB_UNIT" >/dev/null 2>&1; then
+            echo "Starting ChromaDB server..."
+            systemctl --user start "$_RAG_DB_UNIT"
+            for _ in {1..20}; do _rag_db_up && break; sleep 1; done
+        fi
+
+        if ! _rag_db_up; then
+            echo "ChromaDB server is not running on port 8100."
+            echo "Run once: rag-db-setup   (logs: rag-db-logs)"
+            return 1
+        fi
+    fi
+}
+
+
+# =========================================================
+# VECTORCODE RAG CONFIGURATION
+# =========================================================
+
+llm-rag-config() {
+    local root include_file dir
+    root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+    include_file="$root/.vectorcode/vectorcode.include"
+
+    mkdir -p "$root/.vectorcode"
+
+    command cat > "$root/.vectorcode/config.json" <<'EOF'
+{
+  "embedding_function": "OllamaEmbeddingFunction",
+  "embedding_params": {
+    "url": "http://127.0.0.1:11434/api/embeddings",
+    "model_name": "nomic-embed-text:latest"
+  },
+  "db_url": "http://127.0.0.1:8100"
+}
+EOF
+
+    # Never index generated code, migrations, lockfiles or build output.
+    command cat > "$root/.vectorcode/vectorcode.exclude" <<'EOF'
+prisma/migrations/**
+**/generated/**
+node_modules/**
+.next/**
+dist/**
+build/**
+coverage/**
+public/**
+*.lock
+package-lock.json
+pnpm-lock.yaml
+*.min.js
+*.map
+*.ico
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.avif
+*.bmp
+*.svg
+*.woff
+*.woff2
+*.ttf
+*.otf
+*.eot
+*.pdf
+*.zip
+*.gz
+*.mp3
+*.mp4
+*.webm
+*.wav
+*.db
+*.sqlite
+EOF
+
+    # Include list built from the source folders that actually exist.
+    : > "$include_file"
+
+    for dir in src app pages components lib hooks utils types services \
+               server api actions prisma db styles config scripts; do
+        [[ -d "$root/$dir" ]] && echo "$dir/**" >> "$include_file"
+    done
+
+    echo "*.md" >> "$include_file"
+
+    if command -v ollama >/dev/null 2>&1 && \
+       ! ollama list 2>/dev/null | command grep -q '^nomic-embed-text'; then
+        echo "Pulling embedding model nomic-embed-text..."
+        ollama pull nomic-embed-text
+    fi
+
+    echo "VectorCode config created:"
+    echo "  $root/.vectorcode/config.json"
+    echo "Folders to index (edit $include_file if needed):"
+    sed 's/^/  /' "$include_file"
+    echo
+    echo "Next: llm-rag-index"
+}
+
+
+# =========================================================
+# VECTORCODE INDEX
+# =========================================================
+# llm-rag-index            -> index everything in vectorcode.include
+# llm-rag-index app lib    -> index only the given folders
+
+llm-rag-index() {
+    _rag_check || return 1
+
+    local root count
+    root=$(_rag_root)
+
+    if [[ $# -eq 0 ]]; then
+        if [[ ! -f "$root/.vectorcode/vectorcode.include" ]]; then
+            echo "No .vectorcode/vectorcode.include in $root"
+            echo "Run llm-rag-config first, or: llm-rag-index <dir> [dir ...]"
+            return 1
+        fi
+
+        echo "Indexing $root (folders from vectorcode.include)..."
+        ( cd "$root" && VECTORCODE_LOG_LEVEL=WARNING vectorcode --project_root "$root" vectorise )
+    else
+        echo "Indexing: $*"
+        ( cd "$root" && VECTORCODE_LOG_LEVEL=WARNING vectorcode --project_root "$root" vectorise -r "$@" )
+    fi
+
+    local vc_exit=$?
+
+    # A crash (signal) means tree-sitter died on some file.
+    # Re-run with chunk_size=-1: VectorCode then stores each file whole
+    # and never calls tree-sitter. Files already indexed are skipped.
+    if [[ $vc_exit -ge 128 ]]; then
+        echo
+        echo "⚠️  vectorcode crashed (signal $((vc_exit - 128))). Retrying without tree-sitter..."
+
+        if [[ $# -eq 0 ]]; then
+            ( cd "$root" && VECTORCODE_LOG_LEVEL=WARNING vectorcode --project_root "$root" vectorise --chunk_size=-1 )
+        else
+            ( cd "$root" && VECTORCODE_LOG_LEVEL=WARNING vectorcode --project_root "$root" vectorise --chunk_size=-1 -r "$@" )
+        fi
+
+        vc_exit=$?
+    fi
+
+    if [[ $vc_exit -ne 0 ]]; then
+        echo
+        if [[ $vc_exit -ge 128 ]]; then
+            echo "⚠️  vectorcode crashed (signal $((vc_exit - 128)), exit $vc_exit)."
+        else
+            echo "⚠️  vectorcode exited with code $vc_exit."
+        fi
+        local vc_logs=(~/.local/share/vectorcode/logs/*.log(Nom))
+        echo "   Latest log: ${vc_logs[1]:-none found}"
+    fi
+
+    count=$(cd "$root" && vectorcode --project_root "$root" files ls 2>/dev/null | command grep -c .)
+
+    echo
+    if [[ "$count" -gt 0 ]]; then
+        echo "✅ Files in index: $count"
+    else
+        echo "❌ Index is empty. Check the folders in $root/.vectorcode/vectorcode.include"
+        return 1
+    fi
+}
+
+
+# =========================================================
+# VECTORCODE RESET
+# =========================================================
+# Use after changing embedding model / config.
+
+llm-rag-reset() {
+    _rag_check || return 1
+
+    local root
+    root=$(_rag_root)
+
+    ( cd "$root" && vectorcode --project_root "$root" drop ) >/dev/null 2>&1
+    llm-rag-index
+}
+
+
+# =========================================================
+# VECTORCODE STATUS
+# =========================================================
+
+llm-rag-status() {
+    command -v vectorcode >/dev/null 2>&1 || { echo "VectorCode is not installed."; return 1; }
+
+    local root
+    root=$(_rag_root)
+
+    echo "Project root: $root"
+    echo
+
+    echo "=== VectorCode Collections ==="
+    vectorcode ls 2>/dev/null
+
+    echo
+    echo "=== Indexed Files ==="
+    ( cd "$root" && vectorcode --project_root "$root" files ls 2>/dev/null )
+}
+
+
+# =========================================================
+# VECTORCODE HYBRID RAG
+# =========================================================
+
+llm-rag-query() {
+    if [[ $# -eq 0 ]]; then
+        echo "Usage: llm-rag-query <question>"
+        return 1
+    fi
+
+    _rag_check || return 1
+
+    local query="$*"
+    local root context_file rg_files word file exit_code
+    local rg_ignore=(
+        --hidden
+        --glob '!.git/**'
+        --glob '!node_modules/**'
+        --glob '!.next/**'
+        --glob '!dist/**'
+        --glob '!build/**'
+        --glob '!.agents/**'
+        --glob '!.agent_context/**'
+        --glob '!.vectorcode/**'
+        --glob '!*.lock'
+        --glob '!package-lock.json'
+        --glob '!public/**'
+    )
+
+    # Max characters of context sent to Qwen (~10k tokens),
+    # so it fits in Ollama's 16k context and the question isn't cut off.
+    local max_chars=40000
+
+    root=$(_rag_root)
+    context_file=$(mktemp)
+
+    echo "============================================================"
+    echo "HYBRID RAG"
+    echo "============================================================"
+    echo "Project: $root"
+    echo "Query:   $query"
+    echo
+
+    # ---------------------------------------------------------
+    # [1/3] EXACT SEARCH (rg)
+    # ---------------------------------------------------------
+
+    echo "[1/3] Searching exact code matches with rg..."
+
+    rg_files=$(cd "$root" && rg -l -F -i "${rg_ignore[@]}" -- "$query" . 2>/dev/null | head -10)
+
+    if [[ -z "$rg_files" ]]; then
+        for word in ${(s: :)query}; do
+            word="${word//[^a-zA-Z0-9_-]/}"
+            [[ ${#word} -lt 3 ]] && continue
+
+            case "${word:l}" in
+                what|the|this|project|about|how|does|work|works|why|where|which|are|was|and|for|with|from|that|into|have|use|used|uses)
+                    continue
+                    ;;
+            esac
+
+            (cd "$root" && rg -l -F -i "${rg_ignore[@]}" -- "$word" . 2>/dev/null | head -5)
+        done | sort -u | head -10 > "${context_file}.rg"
+    else
+        print -r -- "$rg_files" > "${context_file}.rg"
+    fi
+
+    if [[ -s "${context_file}.rg" ]]; then
+        echo "Found $(wc -l < "${context_file}.rg" | tr -d ' ') matching files."
+    else
+        echo "No exact matches found."
+    fi
+    echo
+
+    # ---------------------------------------------------------
+    # [2/3] SEMANTIC SEARCH (VectorCode)
+    # ---------------------------------------------------------
+
+    echo "[2/3] Searching semantic matches with VectorCode..."
+
+    # Chunks (not whole files) keep context small and relevant.
+    (cd "$root" && vectorcode \
+        --project_root "$root" \
+        --no_stderr \
+        query \
+        --include path chunk \
+        -n 12 \
+        "$query") > "${context_file}.vector" 2>/dev/null
+
+    # Only count it as context if real results came back (they start with "Path:").
+    if command grep -q '^Path:' "${context_file}.vector" 2>/dev/null; then
+        echo "VectorCode returned $(command grep -c '^Path:' "${context_file}.vector") matches."
+    else
+        if [[ -s "${context_file}.vector" ]]; then
+            echo "VectorCode returned no results. Its output was:"
+            head -5 "${context_file}.vector" | sed 's/^/  /'
+        else
+            echo "VectorCode returned no results."
+        fi
+        echo "  Index empty? Run: llm-rag-index"
+        : > "${context_file}.vector"
+    fi
+    echo
+
+    # ---------------------------------------------------------
+    # BUILD CONTEXT
+    # ---------------------------------------------------------
+
+    {
+        echo "PROJECT: ${root:t}"
+        echo
+
+        for file in AGENTS.md .agent_context.md package.json; do
+            [[ -f "$root/$file" ]] || continue
+            echo "===== PROJECT FILE: $file ====="
+            head -c 6000 "$root/$file"
+            echo
+            echo
+        done
+
+        if [[ -s "${context_file}.vector" ]]; then
+            echo "===== SEMANTIC MATCHES (VectorCode) ====="
+            command cat "${context_file}.vector"
+            echo
+        fi
+
+        if [[ -s "${context_file}.rg" ]]; then
+            echo "===== EXACT MATCHES (rg) ====="
+            echo
+
+            while IFS= read -r file; do
+                [[ -f "$root/$file" ]] || continue
+                echo "----- ${file#./} -----"
+
+                for word in "$query" ${(s: :)query}; do
+                    word="${word//[^a-zA-Z0-9_ -]/}"
+                    [[ ${#word} -lt 3 ]] && continue
+                    rg -n -i -F -C 3 -- "$word" "$root/$file" 2>/dev/null | head -40
+                done | awk '!seen[$0]++' | head -60
+
+                echo
+            done < "${context_file}.rg"
+        fi
+    } | head -c "$max_chars" > "$context_file"
+
+    # ---------------------------------------------------------
+    # [3/3] QWEN
+    # ---------------------------------------------------------
+
+    echo "[3/3] Qwen is analyzing the combined context..."
+    echo
+
+    local render=(command cat)
+    command -v glow >/dev/null 2>&1 && render=(glow -)
+
+    {
+        command cat <<EOF
+You are a coding assistant analyzing an existing software project.
+Answer the user's question using ONLY the retrieved project context below.
+
+Rules:
+- The user is asking about existing code. Do not propose changes unless asked.
+- Do not invent files, functions, imports, APIs, or behavior.
+- Mention exact file paths.
+- For "where" questions, list the relevant files.
+- For "how" questions, trace the implementation step by step.
+- If the context is not enough, say so instead of guessing.
+
+RETRIEVED PROJECT CONTEXT:
+EOF
+        command cat "$context_file"
+        echo
+        echo
+        echo "USER QUESTION: $query"
+        echo "Answer using only the context above."
+    } | ollama run "${AI_MODEL:-qwen2.5-agent}" \
+      | perl -pe 's/\e\[[0-9;?]*[ -\/]*[@-~]//g' \
+      | "${render[@]}"
+
+    exit_code=${pipestatus[2]}
+
+    rm -f "$context_file" "${context_file}.rg" "${context_file}.vector"
+
+    return $exit_code
+}
+
+
+# =========================================================
+# MINICPM5 / VLLM
+# =========================================================
+
+minicpm-on() {
+    if [[ ! -d "$HOME/vllm-env" ]]; then
+        echo "vLLM environment not found:"
+        echo "$HOME/vllm-env"
+        return 1
+    fi
+
+    source "$HOME/vllm-env/bin/activate"
+
+    if ! command -v vllm >/dev/null 2>&1; then
+        echo "vLLM command not found."
+        return 1
+    fi
+
+    vllm serve openbmb/MiniCPM5-1B \
+        --host 127.0.0.1 \
+        --port 8000 \
+        --dtype bfloat16 \
+        --max-model-len 8192 \
+        --gpu-memory-utilization 0.30
+}
+
+
+# =========================================================
+# AIDER — MINICPM
+# =========================================================
+
+aider-mini() {
+    local context_files=()
+
+    if [[ -f "AGENTS.md" ]]; then
+        context_files+=(--read "AGENTS.md")
+    elif [[ -f "agents.md" ]]; then
+        context_files+=(--read "agents.md")
+    fi
+
+    if [[ -f "context.md" ]]; then
+        context_files+=(--read "context.md")
+    fi
+
+    AIDER_MODEL="" \
+    OLLAMA_API_BASE="" \
+    OPENAI_BASE_URL="" \
+    OPENAI_API_KEY="" \
+    aider \
+        --openai-api-key "dummy" \
+        --openai-api-base "http://127.0.0.1:8000/v1" \
+        --model "openai/openbmb/MiniCPM5-1B" \
+        "${context_files[@]}" \
+        "$@"
+}
+
+
+# =========================================================
+# AIDER — OLLAMA / QWEN AGENT
+# =========================================================
+
+export AIDER_ANALYTICS=false
+export AIDER_CHECK_UPDATE=false
+export AIDER_SHOW_MODEL_WARNINGS=false
+
+# Aider uses the Agent model.
+export AIDER_MODEL="ollama_chat/$AI_MODEL"
+
+# Reduce unnecessary UI output.
+export AIDER_LIGHT_MODE=true
+export AIDER_STREAM=true
+
+# Keep repository-map context useful without letting it
+# consume excessive context on the 7B model.
+export AIDER_MAP_TOKENS=1024
+export AIDER_MAP_REFRESH="files"
+export AIDER_MAP_MULTIPLIER_NO_FILES=1
+
+
+# =========================================================
+# AIDER LOCAL
+# =========================================================
+
+aider-local() {
+    local context_files=()
+
+    if [[ -f "AGENTS.md" ]]; then
+        context_files+=(--read "AGENTS.md")
+
+    elif [[ -f "agents.md" ]]; then
+        context_files+=(--read "agents.md")
+    fi
+
+    if [[ -f "context.md" ]]; then
+        context_files+=(--read "context.md")
+    fi
+
+    aider \
+        --model "ollama_chat/$AI_MODEL" \
+        --map-tokens "$AIDER_MAP_TOKENS" \
+        --map-refresh "$AIDER_MAP_REFRESH" \
+        --map-multiplier-no-files "$AIDER_MAP_MULTIPLIER_NO_FILES" \
+        "${context_files[@]}" \
+        "$@"
+}
+
+
+# =========================================================
+# AIDER ALIASES
+# =========================================================
+# IMPORTANT:
+# These are aliases ONLY.
+# Do NOT define aider-watch() or aider-diff() functions.
+
+alias aider-watch='aider --model "ollama_chat/$AI_MODEL" --watch-files'
+alias aider-diff='aider --model "ollama_chat/$AI_MODEL" --show-diffs'
+
+
+# =========================================================
+# PLAYWRIGHT
+# =========================================================
+
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/usr/bin/chromium"
+
+
+# =========================================================
+# MINIMAL FASTFETCH
+# =========================================================
+
+if [[ -o interactive ]] && \
+   [[ -z "${FASTFETCH_SHOWN:-}" ]] && \
+   command -v fastfetch >/dev/null 2>&1; then
+
+    export FASTFETCH_SHOWN=1
+
+    fastfetch \
+        --logo none \
+        --structure Title:Separator:OS:Kernel:CPU:GPU:Memory:Disk:Uptime:WM
+fi
+
+# =========================================================
+# AUTOMATIC PROJECT CONTEXT — UA
+# =========================================================
+# Usage:
+#   cd ~/your-project
+#   ua
+#
+# ua is the ONLY command needed.
+# It bootstraps its own helper script automatically.
+# It respects the existing ai-on / ai-off switch.
+# =========================================================
+
+ua() {
+    local root context_dir context_file fingerprint_file lock_dir
+    local tmp prompt output model
+
+    root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+    if [[ -z "$root" ]]; then
+        echo "❌ Not inside a Git repository."
+        return 1
+    fi
+
+    # Your existing ai-on / ai-off aliases are the master switch.
+    # ua NEVER starts or stops Ollama.
+    if ! systemctl is-active --quiet ollama 2>/dev/null; then
+        echo "🔒 AI is OFF — run ai-on first."
+        return 0
+    fi
+
+    root="$(cd "$root" && pwd)"
+    context_dir="$root/.agent_context"
+    context_file="$root/.agent_context.md"
+    fingerprint_file="$context_dir/.fingerprint"
+    lock_dir="$context_dir/.lock"
+
+    mkdir -p "$context_dir"
+
+    if ! mkdir "$lock_dir" 2>/dev/null; then
+        echo "⏳ Project context update already running."
+        return 0
+    fi
+
+    cleanup_ua() {
+        rm -f "$tmp" "$prompt" "$output"
+        rmdir "$lock_dir" 2>/dev/null || true
+    }
+    trap cleanup_ua EXIT
+
+    echo "🔎 Checking project: $(basename "$root")"
+
+    fingerprint="$(
+        {
+            git rev-parse HEAD 2>/dev/null || true
+            git status --porcelain 2>/dev/null || true
+
+            find . -maxdepth 4 -type f \
+                \( -name 'package.json' -o \
+                   -name 'pnpm-lock.yaml' -o \
+                   -name 'package-lock.json' -o \
+                   -name 'yarn.lock' -o \
+                   -name 'bun.lock' -o \
+                   -name 'bun.lockb' -o \
+                   -name 'tsconfig.json' -o \
+                   -name 'next.config.*' -o \
+                   -name 'vite.config.*' -o \
+                   -name 'astro.config.*' -o \
+                   -name 'nuxt.config.*' -o \
+                   -name 'svelte.config.*' -o \
+                   -path './prisma/schema.prisma' -o \
+                   -name 'AGENTS.md' -o \
+                   -name 'README.md' -o \
+                   -name '.env.example' -o \
+                   -name 'docker-compose.yml' -o \
+                   -name 'compose.yml' \) \
+                -not -path './.git/*' \
+                -not -path './node_modules/*' \
+                -not -path './.next/*' \
+                -not -path './dist/*' \
+                -not -path './build/*' \
+                -not -path './coverage/*' \
+                -print0 2>/dev/null \
+            | sort -z | xargs -0r sha256sum
+
+            find . -maxdepth 4 -type f \
+                \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \
+                   -o -name '*.mjs' -o -name '*.cjs' -o -name '*.py' \
+                   -o -name '*.go' -o -name '*.rs' -o -name '*.java' \) \
+                -not -path './.git/*' \
+                -not -path './node_modules/*' \
+                -not -path './.next/*' \
+                -not -path './dist/*' \
+                -not -path './build/*' \
+                -not -path './coverage/*' \
+                -print 2>/dev/null | sort
+        } | sha256sum | awk '{print $1}'
+    )"
+
+    if [[ -f "$fingerprint_file" ]] &&
+       [[ "$(cat "$fingerprint_file")" == "$fingerprint" ]] &&
+       [[ -f "$context_file" ]]; then
+        echo "✅ Project context is already up to date."
+        return 0
+    fi
+
+    echo "🧠 Analyzing project with local LLM..."
+
+    # Make sure the already-enabled Ollama service is responding.
+    for _ in {1..10}; do
+        curl -fsS --max-time 1 \
+            http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break
+        sleep 0.5
+    done
+
+    if ! curl -fsS --max-time 1 \
+        http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+        echo "❌ Ollama is enabled but not responding."
+        return 1
+    fi
+
+    tmp="$context_dir/context.$$.tmp"
+    prompt="$context_dir/context.$$.prompt"
+    output="$context_dir/context.$$.output"
+
+    {
+        echo "# PROJECT FACTS"
+        echo
+        echo "Project: $(basename "$root")"
+        echo "Path: $root"
+        echo
+
+        echo "## Git"
+        git branch --show-current 2>/dev/null || true
+        git log -5 --oneline --decorate 2>/dev/null || true
+        echo
+        git status --short 2>/dev/null || true
+        echo
+        git diff --stat HEAD 2>/dev/null || true
+
+        echo
+        echo "## Project Tree"
+        if command -v eza >/dev/null 2>&1; then
+            eza --tree --level=3 --color=never --icons=never --git-ignore \
+                --ignore-glob='.git|node_modules|.next|dist|build|coverage|.cache' . \
+                2>/dev/null || true
+        elif command -v tree >/dev/null 2>&1; then
+            tree -L 3 \
+                -I 'node_modules|.git|.next|dist|build|coverage|.cache' . \
+                2>/dev/null || true
+        else
+            find . -maxdepth 3 -type f \
+                -not -path './.git/*' \
+                -not -path './node_modules/*' \
+                -not -path './.next/*' \
+                -not -path './dist/*' \
+                -not -path './build/*' \
+                -not -path './coverage/*' \
+                | sort | head -500
+        fi
+
+        echo
+        echo "## Important Project Files"
+        for file in \
+            README.md AGENTS.md package.json tsconfig.json \
+            next.config.ts next.config.js next.config.mjs \
+            vite.config.ts prisma/schema.prisma .env.example \
+            docker-compose.yml compose.yml
+        do
+            if [[ -f "$file" ]]; then
+                echo
+                echo "===== $file ====="
+                sed -n '1,350p' "$file"
+            fi
+        done
+
+        echo
+        echo "## Source File Inventory"
+        find . -maxdepth 4 -type f \
+            \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \
+               -o -name '*.mjs' -o -name '*.cjs' -o -name '*.py' \
+               -o -name '*.go' -o -name '*.rs' -o -name '*.java' \) \
+            -not -path './.git/*' \
+            -not -path './node_modules/*' \
+            -not -path './.next/*' \
+            -not -path './dist/*' \
+            -not -path './build/*' \
+            -not -path './coverage/*' \
+            | sort | head -1000
+    } > "$tmp"
+
+    model="${AI_MODEL:-qwen2.5-agent}"
+
+    cat > "$prompt" <<'EOF'
+You are maintaining a concise architectural context file for an existing software project.
+
+Analyze the PROJECT FACTS below and write a high-level project context document.
+
+Rules:
+- Use only information supported by the supplied facts.
+- Explain what the project is and what it appears to do.
+- Identify the actual technology stack.
+- Describe the architecture and important directories.
+- Identify application entry points, routes, APIs, components, services, and database models when evident.
+- Describe authentication, data access, integrations, and deployment configuration when evident.
+- Mention development commands from package.json when available.
+- Mention meaningful recent Git changes.
+- Identify conventions actually visible in the project.
+- Say "Not determined from scan" when something cannot be established.
+- Keep it concise, approximately 80-150 lines.
+- Do not invent features.
+- Do not expose secrets or .env contents.
+- Do not reproduce large source files.
+
+Use exactly these headings:
+
+# Project Context
+## What This Project Is
+## Technology Stack
+## Architecture
+## Important Directories
+## Application Entry Points
+## Routes and APIs
+## Components and Services
+## Database and Data Layer
+## Authentication and Authorization
+## External Integrations
+## Development Commands
+## Recent Changes
+## Project Conventions
+## Important Files
+## Notes / Unknowns
+
+PROJECT FACTS:
+EOF
+
+    cat "$tmp" >> "$prompt"
+
+    echo "   → Model: $model"
+
+    if ! ollama run "$model" < "$prompt" > "$output" 2>/dev/null; then
+        echo "❌ Ollama analysis failed."
+        return 1
+    fi
+
+    if [[ ! -s "$output" ]]; then
+        echo "❌ Ollama returned an empty result."
+        return 1
+    fi
+
+    {
+        echo "<!-- AUTO-GENERATED BY ua. Do not edit manually. -->"
+        echo "<!-- Generated: $(date '+%Y-%m-%d %H:%M:%S %z') -->"
+        echo
+        cat "$output"
+    } > "$context_file"
+
+    printf '%s\n' "$fingerprint" > "$fingerprint_file"
+
+    echo "✅ Project understood."
+    echo "✅ Updated: $context_file"
+
+}
+
+# Setup claude default
+export CLAUDE_MODEL="claude-haiku-4-5"
