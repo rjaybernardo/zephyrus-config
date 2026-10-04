@@ -14,6 +14,16 @@ opt.pumborder = "rounded"
 
 require("snippets").setup()
 
+-- CodeCompanion chat: its /slash commands, #context and @tools come from the
+-- buffer's omnifunc (nvim-cmp used to supply them), so autocomplete must ask it.
+vim.api.nvim_create_autocmd("FileType", {
+	group = vim.api.nvim_create_augroup("user_codecompanion_completion", { clear = true }),
+	pattern = "codecompanion",
+	callback = function(args)
+		vim.bo[args.buf].complete = "o," .. vim.o.complete
+	end,
+})
+
 -- --------------------------------------------------------------------------
 -- LSP completion
 -- --------------------------------------------------------------------------
