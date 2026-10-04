@@ -169,8 +169,8 @@ fi
 
 export AI_MODEL="qwen2.5-agent"
 
-# Keep frequently used models loaded longer.
-export OLLAMA_KEEP_ALIVE="1h"
+# Unload idle models after 10 min (frees VRAM, lets the dGPU sleep).
+export OLLAMA_KEEP_ALIVE="10m"
 
 # Local Ollama server.
 export OLLAMA_HOST="127.0.0.1:11434"
@@ -245,7 +245,7 @@ Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
 Environment="OLLAMA_NUM_PARALLEL=1"
 Environment="OLLAMA_MAX_LOADED_MODELS=2"
 Environment="OLLAMA_CONTEXT_LENGTH=16384"
-Environment="OLLAMA_KEEP_ALIVE=1h"
+Environment="OLLAMA_KEEP_ALIVE=10m"
 EOF
 
     sudo systemctl daemon-reload || return 1
