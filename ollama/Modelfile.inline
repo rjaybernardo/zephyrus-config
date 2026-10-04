@@ -1,8 +1,9 @@
 FROM qwen3.5:9b
 
 PARAMETER temperature 0.1
-# Qwen3.5's default presence_penalty 1.5 punishes repeated identifiers in code
-PARAMETER presence_penalty 0
+# Keep Qwen3.5's default presence_penalty (1.5): at 0 it fell into endless
+# repetition loops. Cap answer length so a runaway answer can't hang the editor.
+PARAMETER num_predict 4096
 PARAMETER num_ctx 16384
 
 SYSTEM """

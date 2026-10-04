@@ -3,7 +3,7 @@
 Versions: Next.js 16 (App Router, Turbopack default), React 19.2, TypeScript 5/6, Tailwind CSS 4, Prisma ORM 7, Zod 4, Auth.js v5 (`next-auth@5` beta). Your training data is older: Next 14, Prisma 5, Tailwind 3 and Zod 3 patterns below are WRONG here.
 
 ## Next.js 16
-- `middleware.ts` is deprecated: the file is `proxy.ts` and the export is `export function proxy(request: NextRequest) {}`. Runs on Node.js only (no edge). Config flags renamed too (`skipProxyUrlNormalize`).
+- `middleware.ts` is deprecated: the file is `proxy.ts` in the **project root** (or `src/`), next to `app/` — never inside `app/`. Export `export function proxy(request: NextRequest) {}` plus an optional `export const config = { matcher: "/about/:path*" }`. Nothing to add in next.config. Runs on Node.js only (no edge). Config flags renamed too (`skipProxyUrlNormalize`).
 - Request APIs are async. `params` and `searchParams` are Promises; `cookies()`, `headers()`, `draftMode()` must be awaited:
   ```tsx
   export default async function Page({ params }: { params: Promise<{ id: string }> }) {

@@ -31,6 +31,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 ## UI: Polaris web components (not `@shopify/polaris` React)
 - Tags: `<s-page heading="…">`, `<s-section heading="…">`, `<s-stack>`, `<s-box>`, `<s-heading>`, `<s-text>`, `<s-paragraph>`, `<s-button>`, `<s-link>`, `<s-unordered-list>` / `<s-list-item>`, `<s-app-nav>`.
 - App Bridge: `const shopify = useAppBridge();` from `@shopify/app-bridge-react`, e.g. `shopify.toast.show("Saved")`.
+- Toast after a fetcher save (template pattern): react to the action's returned data in a `useEffect`:
+  ```tsx
+  const fetcher = useFetcher<typeof action>();
+  const shopify = useAppBridge();
+  useEffect(() => {
+    if (fetcher.data?.product?.id) shopify.toast.show("Product saved");
+  }, [fetcher.data?.product?.id, shopify]);
+  ```
+  Busy state: `["loading", "submitting"].includes(fetcher.state)`.
 
 ## Rules
 - Do not invent GraphQL fields, scopes or webhook topics. If unsure, say so and point to shopify.dev docs.
