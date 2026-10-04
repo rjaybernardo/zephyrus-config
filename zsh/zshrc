@@ -167,7 +167,10 @@ fi
 # - quick transformations
 # - short coding tasks
 
-export AI_MODEL="qwen2.5-agent"
+export AI_MODEL="qwen3.5-agent"
+
+# Qwen3.5 thinks by default; every `ollama run` below turns it off
+# (faster, and it scored better on stack questions without it).
 
 # Unload idle models after 10 min (frees VRAM, lets the dGPU sleep).
 export OLLAMA_KEEP_ALIVE="10m"
@@ -263,8 +266,8 @@ EOF
 # QWEN SHORTCUTS
 # =========================================================
 
-alias qwen="ollama run qwen2.5-agent"
-alias qwen-inline="ollama run qwen2.5-inline"
+alias qwen="ollama run --think=false qwen3.5-agent"
+alias qwen-inline="ollama run --think=false qwen3.5-inline"
 
 
 # =========================================================
@@ -896,7 +899,7 @@ EOF
         echo
         echo "USER QUESTION: $query"
         echo "Answer using only the context above."
-    } | ollama run "${AI_MODEL:-qwen2.5-agent}" \
+    } | ollama run --think=false "${AI_MODEL:-qwen3.5-agent}" \
       | perl -pe 's/\e\[[0-9;?]*[ -\/]*[@-~]//g' \
       | "${render[@]}"
 
@@ -1003,6 +1006,15 @@ aider-local() {
 
     if [[ -f "context.md" ]]; then
         context_files+=(--read "context.md")
+    fi
+
+    # Stack cheat sheet: the model's training predates this project's versions
+    local root rules="$HOME/.config/nvim/ai/rules"
+    root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+    if [[ -f "$root/shopify.app.toml" ]]; then
+        context_files+=(--read "$rules/shopify.md")
+    elif [[ -f "$root/package.json" ]] && grep -q '"next"' "$root/package.json"; then
+        context_files+=(--read "$rules/nextjs.md")
     fi
 
     aider \
@@ -1239,7 +1251,7 @@ ua() {
             | sort | head -1000
     } > "$tmp"
 
-    model="${AI_MODEL:-qwen2.5-agent}"
+    model="${AI_MODEL:-qwen3.5-agent}"
 
     cat > "$prompt" <<'EOF'
 You are maintaining a concise architectural context file for an existing software project.
@@ -1288,7 +1300,7 @@ EOF
 
     echo "   → Model: $model"
 
-    if ! ollama run "$model" < "$prompt" > "$output" 2>/dev/null; then
+    if ! ollama run --think=false "$model" < "$prompt" > "$output" 2>/dev/null; then
         echo "❌ Ollama analysis failed."
         return 1
     fi

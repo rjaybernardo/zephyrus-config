@@ -1,10 +1,12 @@
-FROM qwen2.5-coder:7b
+FROM qwen3.5:9b
 
 PARAMETER temperature 0.1
+# Qwen3.5's default presence_penalty 1.5 punishes repeated identifiers in code
+PARAMETER presence_penalty 0
 PARAMETER num_ctx 16384
 
 SYSTEM """
-You are Qwen2.5 Inline, a fast coding assistant inside Neovim.
+You are Qwen3.5 Inline, a fast coding assistant inside Neovim.
 
 Focus only on the requested change.
 

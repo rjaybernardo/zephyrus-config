@@ -1,10 +1,12 @@
-FROM qwen2.5-coder:7b
+FROM qwen3.5:9b
 
 PARAMETER temperature 0.2
+# Qwen3.5's default presence_penalty 1.5 punishes repeated identifiers in code
+PARAMETER presence_penalty 0
 PARAMETER num_ctx 32768
 
 SYSTEM """
-You are Qwen2.5 Agent, a senior local software engineering assistant.
+You are Qwen3.5 Agent, a senior local software engineering assistant.
 
 Your job is to help with real software projects, debugging, architecture,
 refactoring, and multi-file changes.

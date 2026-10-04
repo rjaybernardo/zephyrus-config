@@ -237,7 +237,7 @@ end, { desc = "Show which AI backend is active" })
 -- CodeCompanion
 -- --------------------------------------------------------------------------
 
--- Chat and inline share one model so only one copy of the 4.7 GB weights is
+-- Chat and inline share one model so only one copy of the weights (6 GB) is
 -- ever loaded; switching between two tags of the same model makes Ollama
 -- unload and reload it. Temperature is a per-request option, so it doesn't
 -- force a reload.
@@ -246,11 +246,32 @@ local function ollama_adapter(name, temperature)
 		return require("codecompanion.adapters").extend("ollama", {
 			env = { name = name },
 			schema = {
-				model = { default = "qwen2.5-agent" },
+				model = { default = "qwen3.5-agent" },
 				temperature = { default = temperature },
+				-- Qwen3.5 thinks by default: slower and scored worse on stack questions
+				think = { default = false },
 			},
 		})
 	end
+end
+
+-- Stack cheat sheets (ai/rules/*.md): the local model's training predates
+-- Next 16, Prisma 7, Zod 4 and the React Router Shopify template, so the
+-- matching sheet is loaded into every chat in that kind of project.
+local STACK_RULES = vim.fn.stdpath("config") .. "/ai/rules/"
+
+local function project_has(markers)
+	return vim.fs.root(vectorcode_project_root(), markers) ~= nil
+end
+
+local function is_nextjs_project()
+	local pkg = vim.fs.find("package.json", { upward = true, path = vectorcode_project_root() })[1]
+	if not pkg then
+		return false
+	end
+	local okj, json = pcall(vim.json.decode, table.concat(vim.fn.readfile(pkg), "\n"))
+	local deps = okj and type(json) == "table" and vim.tbl_extend("force", json.dependencies or {}, json.devDependencies or {}) or {}
+	return deps.next ~= nil
 end
 
 codecompanion.setup({
@@ -266,9 +287,25 @@ codecompanion.setup({
 			description = "Project instructions and current project context",
 			files = { "AGENTS.md", ".agent_context.md" },
 		},
+		nextjs = {
+			description = "Next.js 16 / Prisma 7 / Tailwind 4 / Zod 4 / Auth.js v5 facts",
+			files = { STACK_RULES .. "nextjs.md" },
+		},
+		shopify = {
+			description = "Shopify React Router app template facts",
+			files = { STACK_RULES .. "shopify.md" },
+		},
 		opts = {
 			chat = {
-				autoload = "project",
+				autoload = function()
+					local groups = { "project" }
+					if project_has({ "shopify.app.toml" }) then
+						table.insert(groups, "shopify")
+					elseif is_nextjs_project() then
+						table.insert(groups, "nextjs")
+					end
+					return groups
+				end,
 				enabled = true,
 				autoload_groups_in_prompt_library = true,
 			},
@@ -326,6 +363,7 @@ Rules:
 - When the user message begins with "RAG:", use ONLY the retrieved repository context supplied in that message.
 - Do not invent repository facts when RAG context is present.
 - Treat AGENTS.md and .agent_context.md loaded as CodeCompanion rules as project-specific source material.
+- "Stack facts" rules describe the exact library versions in this project. They override your training data: never fall back to older APIs they mark as wrong.
 - If a project fact is not supported by the loaded rules, retrieved RAG context, or the actual files/tools available in the chat, say that it is not confirmed instead of inventing it.
 ]]
 			end,
@@ -416,8 +454,8 @@ Rules:
 		},
 
 		http = {
-			ollama_agent = ollama_adapter("Qwen2.5 Agent", 0.2),
-			ollama_inline = ollama_adapter("Qwen2.5 Inline", 0.1),
+			ollama_agent = ollama_adapter("Qwen3.5 Agent", 0.2),
+			ollama_inline = ollama_adapter("Qwen3.5 Inline", 0.1),
 
 			minicpm = function()
 				return require("codecompanion.adapters").extend("openai", {
