@@ -8,6 +8,10 @@
       "rev": "3eacce5ad1c8e439e7dbeab3a8d6bdb6b8aa1cab",
       "src": "https://github.com/Davidyz/VectorCode"
     },
+    "catppuccin": {
+      "rev": "edefef779ab08ce1a4a404713e3012b0d202bd35",
+      "src": "https://github.com/catppuccin/nvim"
+    },
     "cmp-buffer": {
       "rev": "b74fab3656eea9de20a9b8116afa3cfc4ec09657",
       "src": "https://github.com/hrsh7th/cmp-buffer"

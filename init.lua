@@ -475,7 +475,7 @@ if has_ts then
 			)
 
 			if ok then
-				vim.bo.indentexpr =
+				vim.bo[args.buf].indentexpr =
 				"v:lua.require'nvim-treesitter'.indentexpr()"
 			end
 		end,
@@ -620,14 +620,19 @@ if has_conform then
 
 					if not plugin_path
 					    and vim.fn.executable("npm") == 1 then
-						local global_root =
-						    vim.trim(
-							    vim.fn.system({
-								    "npm",
-								    "root",
-								    "-g",
-							    })
-						    )
+						-- `npm root -g` spawns node; run it once per session.
+						if vim.g.npm_global_root == nil then
+							vim.g.npm_global_root =
+							    vim.trim(
+								    vim.fn.system({
+									    "npm",
+									    "root",
+									    "-g",
+								    })
+							    )
+						end
+
+						local global_root = vim.g.npm_global_root
 
 						if global_root ~= "" then
 							local global_plugin =
@@ -898,20 +903,6 @@ export default {};
 		)
 	end
 end
-
-
--- ==========================================================================
--- GENERAL KEYMAPS
--- ==========================================================================
-
-vim.keymap.set(
-	"n",
-	"<leader>u",
-	"<Nop>",
-	{
-		desc = "UI Toggles Group",
-	}
-)
 
 
 -- ==========================================================================
@@ -1602,27 +1593,7 @@ end
 -- DIAGNOSTIC SIGNS
 -- ==========================================================================
 
-local signs = {
-	Error = "󰅚 ",
-	Warn = "󰀪 ",
-	Hint = "󰌶 ",
-	Info = "󰋽 ",
-}
-
-for type, icon in pairs(signs) do
-	local hl = "DiagnosticSign" .. type
-
-	vim.fn.sign_define(
-		hl,
-		{
-			text = icon,
-			texthl = hl,
-			numhl = "",
-		}
-	)
-end
-
-
+-- Neovim 0.11+ defines diagnostic signs here (sign_define is deprecated for this).
 vim.diagnostic.config({
 	virtual_text = {
 		prefix = "●",
@@ -1630,7 +1601,14 @@ vim.diagnostic.config({
 		source = "if_many",
 	},
 
-	signs = true,
+	signs = {
+		text = {
+			[vim.diagnostic.severity.ERROR] = "󰅚 ",
+			[vim.diagnostic.severity.WARN] = "󰀪 ",
+			[vim.diagnostic.severity.HINT] = "󰌶 ",
+			[vim.diagnostic.severity.INFO] = "󰋽 ",
+		},
+	},
 	underline = true,
 	update_in_insert = false,
 	severity_sort = true,
@@ -1806,12 +1784,13 @@ vim.lsp.config(
 					},
 				},
 
+				-- Only index the Neovim runtime. Indexing every plugin in
+				-- the runtimepath keeps lua_ls busy (and the CPU hot).
 				workspace = {
-					library =
-					    vim.api.nvim_get_runtime_file(
-						    "",
-						    true
-					    ),
+					library = {
+						vim.env.VIMRUNTIME,
+						"${3rd}/luv/library",
+					},
 
 					checkThirdParty = false,
 				},
@@ -1860,6 +1839,8 @@ vim.lsp.config(
 			"css",
 			"javascript",
 			"typescript",
+			"javascriptreact",
+			"typescriptreact",
 			"liquid",
 		},
 
@@ -1984,6 +1965,16 @@ if has_wk then
 			"<leader>w",
 			group = "Window Navigation",
 		},
+
+		{
+			"<leader>cn",
+			desc = "New AI Chat (current backend)",
+		},
+
+		{
+			"<leader>cs",
+			desc = "AI Backend Status",
+		},
 	})
 end
 
@@ -2012,6 +2003,18 @@ vim.keymap.set(
 	}
 )
 
+-- ==========================================================================
+-- Claude AI
+-- ==========================================================================
+
+
+vim.keymap.set('n', '<leader>ct', function()
+	if vim.g.ai_backend == 'claude' then
+		vim.cmd('ClaudeOff')
+	else
+		vim.cmd('ClaudeOn')
+	end
+end, { silent = true, desc = "Toggle Claude / local AI backend" })
 
 -- ==========================================================================
 -- 9. LOCAL LLM / VECTORCODE / CODECOMPANION
@@ -2140,6 +2143,164 @@ local function vectorcode_rag_prompt(message)
 		query,
 	}, "\n")
 end
+
+
+-- ==========================================================================
+-- AI BACKEND SWITCH (LOCAL OLLAMA vs CLAUDE)
+-- ==========================================================================
+-- Two separate switches, matching the shell:
+--   Local : `ai-on` / `ai-off` in the terminal (starts/stops the ollama service)
+--   Claude: `:ClaudeOn` / `:ClaudeOff` inside Neovim
+--
+-- Chat (<leader>cc, RAG:, <leader>cd) uses Claude while :ClaudeOn is active,
+-- otherwise the local Qwen model.
+-- Inline (<leader>ci) and the action palette always use the local model:
+-- Claude Code runs as an agent over ACP and only works in the chat buffer.
+
+local CLAUDE_ADAPTER = "claude_code"
+local LOCAL_CHAT_ADAPTER = "ollama_agent"
+local CLAUDE_TOKEN_FILE = vim.fn.expand("~/.config/codecompanion/claude_token")
+
+vim.g.ai_backend = vim.g.ai_backend or "local"
+
+
+local function ollama_running()
+	local ok, result = pcall(function()
+		return vim.system(
+			{ "systemctl", "is-active", "--quiet", "ollama" },
+			{ text = true }
+		):wait(2000)
+	end)
+
+	return ok and result and result.code == 0
+end
+
+
+-- Load the Claude Pro OAuth token (from `claude setup-token`) without
+-- hard-coding it in this file. An exported CLAUDE_CODE_OAUTH_TOKEN wins.
+local function load_claude_token()
+	if vim.env.CLAUDE_CODE_OAUTH_TOKEN and vim.env.CLAUDE_CODE_OAUTH_TOKEN ~= "" then
+		return true
+	end
+
+	if vim.uv.fs_stat(CLAUDE_TOKEN_FILE) then
+		local lines = vim.fn.readfile(CLAUDE_TOKEN_FILE)
+		local token = vim.trim(table.concat(lines, ""))
+
+		if token ~= "" then
+			vim.env.CLAUDE_CODE_OAUTH_TOKEN = token
+			return true
+		end
+	end
+
+	return false
+end
+
+
+local function set_chat_adapter(name)
+	local ok, cc_config = pcall(require, "codecompanion.config")
+
+	if ok and cc_config.interactions and cc_config.interactions.chat then
+		cc_config.interactions.chat.adapter = name
+	end
+end
+
+
+local function chat_window_open()
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		local buf = vim.api.nvim_win_get_buf(win)
+
+		if vim.bo[buf].filetype == "codecompanion" then
+			return true
+		end
+	end
+
+	return false
+end
+
+
+-- Returns true when the backend needed for this action is switched on.
+-- kind = "chat" or "inline"
+local function ai_ready(kind)
+	if kind == "chat" and vim.g.ai_backend == "claude" then
+		return true
+	end
+
+	if ollama_running() then
+		return true
+	end
+
+	if kind == "inline" and vim.g.ai_backend == "claude" then
+		vim.notify(
+			"Inline edits use the local model. Run ai-on, or ask Claude in chat (<leader>cc).",
+			vim.log.levels.WARN,
+			{ title = "AI" }
+		)
+	else
+		vim.notify(
+			"🔒 AI is OFF — run ai-on (local) or :ClaudeOn (Claude).",
+			vim.log.levels.WARN,
+			{ title = "AI" }
+		)
+	end
+
+	return false
+end
+
+
+vim.api.nvim_create_user_command("ClaudeOn", function()
+	if vim.fn.executable("claude-agent-acp") ~= 1 then
+		vim.notify(
+			"claude-agent-acp not found.\nInstall: npm install -g @zed-industries/claude-agent-acp",
+			vim.log.levels.ERROR,
+			{ title = "Claude" }
+		)
+		return
+	end
+
+	if not load_claude_token() then
+		vim.notify(
+			"No Claude token.\nRun `claude setup-token` and save it to:\n" .. CLAUDE_TOKEN_FILE,
+			vim.log.levels.ERROR,
+			{ title = "Claude" }
+		)
+		return
+	end
+
+	vim.g.ai_backend = "claude"
+	set_chat_adapter(CLAUDE_ADAPTER)
+
+	vim.notify(
+		"Claude ON — new chats use Claude Code (Pro).\n"
+		.. "An already-open chat keeps its model: <leader>cn starts a new one.",
+		vim.log.levels.INFO,
+		{ title = "AI" }
+	)
+end, { desc = "Use Claude Code for AI chat" })
+
+
+vim.api.nvim_create_user_command("ClaudeOff", function()
+	vim.g.ai_backend = "local"
+	set_chat_adapter(LOCAL_CHAT_ADAPTER)
+
+	vim.notify(
+		"Claude OFF — new chats use the local model"
+		.. (ollama_running() and "." or " (Ollama is off: run ai-on)."),
+		vim.log.levels.INFO,
+		{ title = "AI" }
+	)
+end, { desc = "Use the local Ollama model for AI chat" })
+
+
+vim.api.nvim_create_user_command("AiStatus", function()
+	vim.notify(
+		"Chat backend : " .. (vim.g.ai_backend == "claude" and "Claude Code" or "Local (Qwen)") .. "\n"
+		.. "Ollama       : " .. (ollama_running() and "running" or "off") .. "\n"
+		.. "Inline       : Local (Qwen)",
+		vim.log.levels.INFO,
+		{ title = "AI" }
+	)
+end, { desc = "Show which AI backend is active" })
 
 
 -- ==========================================================================
@@ -2275,6 +2436,15 @@ Rules:
 				},
 			},
 
+			keymaps = {
+				-- Default is "ga", which clashes with your "ga" = accept change.
+				change_adapter = {
+					modes = {
+						n = "gA",
+					},
+				},
+			},
+
 			opts = {
 				collapse_tools = false,
 
@@ -2388,6 +2558,24 @@ Rules:
 
 	adapters = {
 
+		-- Claude Code over ACP (uses your Claude Pro login, no API key).
+		-- Needs: npm install -g @zed-industries/claude-agent-acp
+		-- Token: `claude setup-token` -> ~/.config/codecompanion/claude_token
+		acp = {
+			claude_code = function()
+				return require(
+					"codecompanion.adapters"
+				).extend(
+					"claude_code",
+					{
+						defaults = {
+							timeout = 60000,
+						},
+					}
+				)
+			end,
+		},
+
 		http = {
 
 			ollama_agent = function()
@@ -2465,19 +2653,51 @@ Rules:
 -- CODECOMPANION KEYMAPS
 -- ==========================================================================
 
+-- Toggle chat. Closing an open chat always works; opening needs a backend on.
 vim.keymap.set(
 	{ "n", "x" },
 	"<leader>cc",
-	"<cmd>CodeCompanionChat Toggle<CR>",
+	function()
+		if chat_window_open() or ai_ready("chat") then
+			vim.cmd("CodeCompanionChat Toggle")
+		end
+	end,
 	{
 		desc = "Toggle AI Chat Agent",
+	}
+)
+
+-- Always start a fresh chat with the current backend (use after :ClaudeOn / :ClaudeOff).
+vim.keymap.set(
+	"n",
+	"<leader>cn",
+	function()
+		if ai_ready("chat") then
+			vim.cmd("CodeCompanionChat")
+		end
+	end,
+	{
+		desc = "New AI Chat (current backend)",
+	}
+)
+
+vim.keymap.set(
+	"n",
+	"<leader>cs",
+	"<cmd>AiStatus<CR>",
+	{
+		desc = "AI Backend Status",
 	}
 )
 
 vim.keymap.set(
 	"n",
 	"<leader>ci",
-	"<cmd>CodeCompanion<CR>",
+	function()
+		if ai_ready("inline") then
+			vim.cmd("CodeCompanion")
+		end
+	end,
 	{
 		desc = "Inline AI Fix/Transform",
 	}
@@ -2486,7 +2706,11 @@ vim.keymap.set(
 vim.keymap.set(
 	"x",
 	"<leader>ci",
-	":CodeCompanion<CR>",
+	function()
+		if ai_ready("inline") then
+			vim.api.nvim_feedkeys(":CodeCompanion\r", "n", false)
+		end
+	end,
 	{
 		desc = "Inline AI Fix/Transform Selection",
 	}
@@ -2537,19 +2761,27 @@ vim.keymap.set(
 			return
 		end
 
+		if not ai_ready("chat") then
+			return
+		end
+
+		-- One new chat with the question already sent
+		-- (old version toggled a chat AND opened a second one).
 		local err_msg =
-		    diagnostics[1].message
+		    diagnostics[1].message:gsub("\n", " ")
 
-		vim.cmd(
-			"CodeCompanionChat Toggle"
-		)
+		local code_line = vim.trim(vim.api.nvim_get_current_line())
 
-		vim.schedule(function()
-			vim.cmd(
-				"CodeCompanion /explain Why am I getting this LSP error: "
-				.. err_msg
-			)
-		end)
+		require("codecompanion").chat({
+			user_prompt = "Why am I getting this LSP error in "
+			    .. vim.fn.expand("%:.")
+			    .. " line "
+			    .. vim.fn.line(".")
+			    .. "?\n\nCode: "
+			    .. code_line
+			    .. "\nError: "
+			    .. err_msg,
+		})
 	end,
 	{
 		desc = "AI Explain LSP Error on Current Line",
@@ -2606,16 +2838,19 @@ local ai_cleaner_group =
 vim.api.nvim_create_autocmd(
 	"User",
 	{
+		-- "CodeCompanionChatFinished" does not exist; the real event is ChatDone.
 		pattern = {
-			"CodeCompanionChatFinished",
+			"CodeCompanionChatDone",
 			"CodeCompanionInlineFinished",
 		},
 
 		group = ai_cleaner_group,
 
 		callback = function(request)
+			-- Use the buffer CodeCompanion reports, not whatever window has focus.
 			local buf =
-			    request.buf
+			    (request.data and request.data.bufnr)
+			    or request.buf
 			    or vim.api.nvim_get_current_buf()
 
 			if not vim.api.nvim_buf_is_valid(buf) then
