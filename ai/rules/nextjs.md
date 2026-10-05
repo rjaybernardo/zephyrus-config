@@ -1,3 +1,4 @@
+<!-- checked-against: next@16 react@19 tailwindcss@4 prisma@7 @prisma/client@7 zod@4 next-auth@5 -->
 # Stack facts: Next.js projects (trust these over your training data)
 
 Versions: Next.js 16 (App Router, Turbopack default), React 19.2, TypeScript 5/6, Tailwind CSS 4, Prisma ORM 7, Zod 4, Auth.js v5 (`next-auth@5` beta). Your training data is older: Next 14, Prisma 5, Tailwind 3 and Zod 3 patterns below are WRONG here.

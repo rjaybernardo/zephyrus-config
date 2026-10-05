@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Print the stack cheat sheet for a project, and warn (stderr) when the project's
+# major versions differ from the ones the sheet was checked against.
+# Each sheet's first line lists them: <!-- checked-against: next@16 prisma@7 -->
+# Used by zshrc (qwen, aider-*, llm-rag-query) and lua/plugins/ai.lua.
+#
+#   stack-sheet [dir]          sheet path on stdout (nothing if no sheet fits)
+#   stack-sheet --check [dir]  warnings only
+set -uo pipefail
+RULES=$(dirname "$(readlink -f "$0")")
+check_only=0
+[[ ${1:-} == --check ]] && { check_only=1; shift; }
+dir=${1:-$PWD}
+root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || echo "$dir")
+
+if [[ -f $root/shopify.app.toml ]]; then
+  sheet=$RULES/shopify.md
+elif [[ -f $root/package.json ]] && jq -e '(.dependencies // {}) + (.devDependencies // {}) | has("next")' "$root/package.json" >/dev/null 2>&1; then
+  sheet=$RULES/nextjs.md
+else
+  exit 0
+fi
+(( check_only )) || echo "$sheet"
+
+# Installed version wins; otherwise the range in package.json ("^7.10.0" → 7)
+major() {
+  local v
+  v=$(jq -r '.version // empty' "$root/node_modules/$1/package.json" 2>/dev/null)
+  [[ -n $v ]] || v=$(jq -r --arg p "$1" '((.dependencies // {}) + (.devDependencies // {}))[$p] // empty' "$root/package.json")
+  [[ $v =~ ^[^0-9]*([0-9]+) ]] && echo "${BASH_REMATCH[1]}"
+}
+
+stale=()
+for pair in $(sed -n '1s/.*checked-against:\(.*\)-->.*/\1/p' "$sheet"); do
+  pkg=${pair%@*} want=${pair##*@}
+  have=$(major "$pkg")
+  [[ -n $have && $have != "$want" ]] && stale+=("$pkg $want → $have")
+done
+if (( ${#stale[@]} )); then
+  list=$(printf '%s, ' "${stale[@]}")
+  echo "stack sheet $(basename "$sheet") is out of date for this project (${list%, }) — update ${sheet/#$HOME/\~}" >&2
+fi
+exit 0

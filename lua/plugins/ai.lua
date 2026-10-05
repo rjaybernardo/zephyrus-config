@@ -274,6 +274,23 @@ local function is_nextjs_project()
 	return deps.next ~= nil
 end
 
+-- Once per project: warn when its major versions outgrew the loaded sheet
+-- (each sheet's first line lists the versions it was checked against).
+local stale_sheet_checked = {}
+local function warn_if_sheet_stale()
+	local root = vectorcode_project_root()
+	if stale_sheet_checked[root] then
+		return
+	end
+	stale_sheet_checked[root] = true
+	local ok, res = pcall(function()
+		return vim.system({ STACK_RULES .. "stack-sheet", "--check", root }, { text = true }):wait(3000)
+	end)
+	if ok and res.stderr and res.stderr ~= "" then
+		vim.notify(vim.trim(res.stderr), vim.log.levels.WARN, { title = "CodeCompanion" })
+	end
+end
+
 codecompanion.setup({
 	display = {
 		action_palette = { provider = "telescope" },
@@ -303,6 +320,9 @@ codecompanion.setup({
 						table.insert(groups, "shopify")
 					elseif is_nextjs_project() then
 						table.insert(groups, "nextjs")
+					end
+					if #groups > 1 then
+						warn_if_sheet_stale()
 					end
 					return groups
 				end,

@@ -271,8 +271,51 @@ EOF
 # QWEN SHORTCUTS
 # =========================================================
 
-alias qwen="ollama run --think=false qwen3.5-agent"
-alias qwen-inline="ollama run --think=false qwen3.5-inline"
+# Stack cheat sheet for the current project (Next.js / Shopify), or nothing.
+# Also warns on stderr when the project's major versions outgrew the sheet.
+AI_STACK_SHEET="$HOME/.config/nvim/ai/rules/stack-sheet"
+_ai_sheet_read() {
+    local sheet
+    sheet=$("$AI_STACK_SHEET")
+    [[ -n $sheet ]] && print -r -- --read "$sheet"
+}
+
+# `ollama run` can't take a system file, so in a Next.js / Shopify project
+# this runs a derived model (e.g. qwen3.5-agent-nextjs) whose system prompt
+# is the base one + the sheet. Only a small manifest; rebuilt when the sheet
+# or the base Modelfile changes.
+_qwen_run() {
+    local model=$1 sheet name stamp base_mf
+    shift
+    sheet=$("$AI_STACK_SHEET")
+    if [[ -n $sheet ]]; then
+        name="$model-${sheet:t:r}"
+        stamp="${XDG_CACHE_HOME:-$HOME/.cache}/ai-sheet/$name.Modelfile"
+        base_mf="$HOME/.config/ollama/Modelfile.${model#qwen3.5-}"
+        if [[ ! -f $stamp || $sheet -nt $stamp || $base_mf -nt $stamp ]] \
+            || ! ollama show "$name" >/dev/null 2>&1; then
+            mkdir -p "${stamp:h}"
+            {
+                print -r -- "FROM $model"
+                print -r -- 'SYSTEM """'
+                ollama show --system "$model"
+                print
+                command cat "$sheet"
+                print -r -- '"""'
+            } > "$stamp"
+            if ! ollama create "$name" -f "$stamp" >/dev/null 2>&1; then
+                rm -f "$stamp"
+                echo "qwen: couldn't build $name (ai-on?) — running without the stack sheet" >&2
+                name=$model
+            fi
+        fi
+        model=$name
+    fi
+    ollama run --think=false "$model" "$@"
+}
+
+qwen() { _qwen_run qwen3.5-agent "$@"; }
+qwen-inline() { _qwen_run qwen3.5-inline "$@"; }
 
 
 # =========================================================
@@ -761,6 +804,11 @@ llm-rag-query() {
     local max_chars=40000
 
     root=$(_rag_root)
+
+    # Stack cheat sheet (if one fits): comes out of the same context budget
+    local sheet
+    sheet=$("$AI_STACK_SHEET" "$root")
+    [[ -n $sheet ]] && (( max_chars -= $(wc -c < "$sheet") ))
     context_file=$(mktemp)
 
     echo "============================================================"
@@ -895,9 +943,17 @@ Rules:
 - For "where" questions, list the relevant files.
 - For "how" questions, trace the implementation step by step.
 - If the context is not enough, say so instead of guessing.
+- STACK FACTS (if present) give the library versions and APIs used here; they
+  override your training data. For exact code, quote the project files, not
+  the stack facts.
 
-RETRIEVED PROJECT CONTEXT:
 EOF
+        if [[ -n $sheet ]]; then
+            echo "STACK FACTS:"
+            command cat "$sheet"
+            echo
+        fi
+        echo "RETRIEVED PROJECT CONTEXT:"
         command cat "$context_file"
         echo
         echo
@@ -956,13 +1012,7 @@ aider-local() {
     fi
 
     # Stack cheat sheet: the model's training predates this project's versions
-    local root rules="$HOME/.config/nvim/ai/rules"
-    root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-    if [[ -f "$root/shopify.app.toml" ]]; then
-        context_files+=(--read "$rules/shopify.md")
-    elif [[ -f "$root/package.json" ]] && grep -q '"next"' "$root/package.json"; then
-        context_files+=(--read "$rules/nextjs.md")
-    fi
+    context_files+=($(_ai_sheet_read))
 
     aider \
         --model "ollama_chat/$AI_MODEL" \
@@ -981,8 +1031,9 @@ aider-local() {
 # These are aliases ONLY.
 # Do NOT define aider-watch() or aider-diff() functions.
 
-alias aider-watch='aider --model "ollama_chat/$AI_MODEL" --watch-files'
-alias aider-diff='aider --model "ollama_chat/$AI_MODEL" --show-diffs'
+# $(_ai_sheet_read) adds the stack cheat sheet (--read <sheet>) when one fits.
+alias aider-watch='aider --model "ollama_chat/$AI_MODEL" $(_ai_sheet_read) --watch-files'
+alias aider-diff='aider --model "ollama_chat/$AI_MODEL" $(_ai_sheet_read) --show-diffs'
 
 
 # =========================================================
