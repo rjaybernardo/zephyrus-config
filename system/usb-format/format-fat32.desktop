@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Service
+MimeType=inode/directory;
+Actions=formatFat32
+X-KDE-Priority=TopLevel
+
+[Desktop Action formatFat32]
+Name=Format USB as FAT32
+Icon=drive-removable-media
+Exec=ghostty -e /home/rjaybernardo/.config/nvim/system/usb-format/format-fat32.sh %f
