@@ -44,12 +44,11 @@
         }
     }
 
-// FreeCAD: behave like a normal desktop application.
+// Open FreeCAD tiled and maximized (not floating).
 window-rule {
     match app-id="org.freecad.FreeCAD"
-     open-floating true
-    open-maximized false
-    open-fullscreen false
+    open-floating false
+    open-maximized true
 }
 
 // Open Kdenlive maximized.
