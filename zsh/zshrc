@@ -193,8 +193,9 @@ export OPENAI_MODEL="$AI_MODEL"
 # OLLAMA SYSTEM CONTROL
 # =========================================================
 
-alias ai-on="systemctl start ollama"
-alias ai-off="systemctl stop ollama"
+# Chroma (VectorCode RAG, :8100) rides along: useless without Ollama embeddings, so not started at login (battery)
+alias ai-on="systemctl start ollama && systemctl --user start vectorcode-chroma"
+alias ai-off="systemctl stop ollama; systemctl --user stop vectorcode-chroma"
 alias ai-restart="systemctl restart ollama"
 alias ai-status="systemctl status ollama --no-pager"
 
@@ -441,7 +442,7 @@ _rag_root() {
 # ("httpx.ConnectError: All connection attempts failed").
 # A standalone ChromaDB 0.6.3 server fixes that.
 # Run once:  rag-db-setup
-# It then starts automatically at login (systemd user service).
+# Not started at login (battery): ai-on starts it, ai-off stops it.
 
 _RAG_DB_URL="http://127.0.0.1:8100"
 _RAG_DB_DIR="$HOME/.local/share/vectorcode/chroma-server"
@@ -481,7 +482,7 @@ WantedBy=default.target
 EOF
 
     systemctl --user daemon-reload
-    systemctl --user enable --now "$_RAG_DB_UNIT" || return 1
+    systemctl --user start "$_RAG_DB_UNIT" || return 1
 
     echo -n "Waiting for ChromaDB on port 8100"
     for _ in {1..30}; do
