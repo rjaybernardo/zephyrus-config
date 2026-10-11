@@ -9,7 +9,7 @@ local opt = vim.opt
 
 opt.autocomplete = true
 opt.complete = ".^5,w^5,b^5,u^5"
-opt.completeopt = { "menuone", "noselect", "popup" }
+opt.completeopt = { "menuone", "noselect", "popup", "fuzzy" }
 opt.pumborder = "rounded"
 
 require("snippets").setup()
@@ -36,8 +36,9 @@ local function convert(item)
 	return { kind = icon and (icon .. " " .. kind) or kind }
 end
 
--- Order merged results like the old nvim-cmp priorities: language servers,
--- then snippets, then emmet (which offers every word as an HTML tag).
+-- Best fuzzy match first (a custom cmp replaces the built-in fuzzy sort, so
+-- it has to redo it). Ties go to language servers, then snippets, then emmet
+-- (which offers every word as an HTML tag), then the server's sortText.
 local client_rank = { snippets = 2, emmet_ls = 3 }
 
 local function rank(item)
@@ -46,6 +47,10 @@ local function rank(item)
 end
 
 local function compare(a, b)
+	local sa, sb = a._fuzzy_score or 0, b._fuzzy_score or 0
+	if sa ~= sb then
+		return sa > sb
+	end
 	local ra, rb = rank(a), rank(b)
 	if ra ~= rb then
 		return ra < rb
@@ -73,6 +78,27 @@ vim.api.nvim_create_autocmd("LspAttach", {
 
 		-- LSP drives the menu here; built-in autocomplete would open a competing one.
 		vim.bo[args.buf].autocomplete = false
+	end,
+})
+
+-- --------------------------------------------------------------------------
+-- Signature help: show parameter hints automatically after "(" and ","
+-- (or whatever the server declares), like VS Code. <C-S-Space> still works.
+-- --------------------------------------------------------------------------
+
+vim.api.nvim_create_autocmd("InsertCharPre", {
+	group = vim.api.nvim_create_augroup("user_lsp_signature", { clear = true }),
+	callback = function(args)
+		local char = vim.v.char
+		for _, client in ipairs(vim.lsp.get_clients({ bufnr = args.buf, method = "textDocument/signatureHelp" })) do
+			local triggers = client.server_capabilities.signatureHelpProvider.triggerCharacters or {}
+			if vim.list_contains(triggers, char) then
+				vim.schedule(function()
+					vim.lsp.buf.signature_help({ focusable = false, silent = true, border = "rounded" })
+				end)
+				return
+			end
+		end
 	end,
 })
 

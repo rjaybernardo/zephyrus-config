@@ -114,10 +114,30 @@ vim.lsp.config("lua_ls", {
 vim.lsp.config("emmet_ls", {
 	-- emmet-ls advertises completionItem/resolve but doesn't implement it,
 	-- which prints "Unhandled method" while browsing the completion menu.
+	--
+	-- Its results are also flagged incomplete so native completion re-asks
+	-- on every keystroke. Otherwise the menu filters the result for "u"
+	-- locally and closes once you type "ul>li" or "div.card".
 	on_init = function(client)
 		local provider = client.server_capabilities.completionProvider
 		if provider then
 			provider.resolveProvider = false
+		end
+
+		local request = client.request
+		client.request = function(self, method, params, handler, bufnr)
+			if method == "textDocument/completion" and handler then
+				local on_result = handler
+				handler = function(err, result, ...)
+					if vim.islist(result) then
+						result = { isIncomplete = true, items = result }
+					elseif type(result) == "table" then
+						result.isIncomplete = true
+					end
+					return on_result(err, result, ...)
+				end
+			end
+			return request(self, method, params, handler, bufnr)
 		end
 	end,
 	filetypes = {
