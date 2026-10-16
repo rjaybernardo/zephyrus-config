@@ -15,6 +15,7 @@ binds {
     Mod+G hotkey-overlay-title="Open Browser: Google Chrome" { spawn "google-chrome-stable"; }
     Mod+D hotkey-overlay-title="Open Dolphin: Dolphin" { spawn "dolphin"; }
     Mod+B hotkey-overlay-title="Open Blanket: Blanket" { spawn "blanket"; }
+    Mod+A hotkey-overlay-title="Open ArtCraft: ArtCraft Launcher" { spawn "/home/rjaybernardo/Applications/artcraft-launcher-0.3.2-linux-x86_64.AppImage"; }
     Ctrl+Shift+P hotkey-overlay-title="Screenshot: Select Area" { screenshot; }
 
 
