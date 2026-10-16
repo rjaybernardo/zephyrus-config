@@ -1,0 +1,10 @@
+[Unit]
+Description=Auto-mount external drives via udisks2 (system/automount/automount.sh)
+
+[Service]
+ExecStart=%h/.config/nvim/system/automount/automount.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
