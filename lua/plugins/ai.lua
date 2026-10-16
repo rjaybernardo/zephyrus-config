@@ -7,6 +7,7 @@
 --
 -- Chat (<leader>cc, RAG:, <leader>cd) uses Claude while :ClaudeOn is active,
 -- otherwise the local Qwen model on the RTX 4060.
+-- Local agent (<leader>cg) is always Qwen, with thinking on and a lean tool set.
 -- Inline (<leader>ci) and the action palette always use the local model:
 -- Claude Code runs as an agent over ACP and only works in the chat buffer.
 
@@ -241,18 +242,151 @@ end, { desc = "Show which AI backend is active" })
 -- ever loaded; switching between two tags of the same model makes Ollama
 -- unload and reload it. Temperature is a per-request option, so it doesn't
 -- force a reload.
-local function ollama_adapter(name, temperature)
+local function ollama_adapter(name, temperature, think)
 	return function()
+		local schema = {
+			model = { default = "qwen3.5-agent" },
+			temperature = { default = temperature },
+			-- Qwen3.5 thinks by default: slower and scored worse on stack questions
+			think = { default = think == true },
+		}
+		if think then
+			-- Thinking tokens count toward num_predict; the Modelfile's 4096
+			-- can cut a tool call off mid-JSON.
+			schema.num_predict = {
+				order = 5,
+				mapping = "parameters.options",
+				type = "number",
+				default = 8192,
+				desc = "Maximum tokens to generate (thinking included).",
+			}
+		end
 		return require("codecompanion.adapters").extend("ollama", {
 			env = { name = name },
-			schema = {
-				model = { default = "qwen3.5-agent" },
-				temperature = { default = temperature },
-				-- Qwen3.5 thinks by default: slower and scored worse on stack questions
-				think = { default = false },
-			},
+			schema = schema,
 		})
 	end
+end
+
+-- Semantic repo search as a chat tool. VectorCode's own CodeCompanion tools
+-- (vectorcode_query, vectorcode_toolbox) target an older tool API: they load
+-- with no schema, so the model never sees them. This calls the CLI directly,
+-- the same way "RAG:" does.
+local semantic_search_tool = {
+	description = "Semantic search over the indexed repository (VectorCode)",
+	opts = { require_approval_before = false },
+	callback = function()
+		return {
+			name = "semantic_search",
+			cmds = {
+				function(_, args, opts)
+					local query = vim.trim(args.query or "")
+					if query == "" then
+						return { status = "error", data = "query is required" }
+					end
+					local root = vectorcode_project_root()
+					local ran, job = pcall(vim.system, {
+						"vectorcode",
+						"--project_root",
+						root,
+						"--no_stderr",
+						"query",
+						"-n",
+						tostring(math.min(tonumber(args.count) or 5, 10)),
+						query,
+					}, { cwd = root, text = true }, function(result)
+						-- Same as RAG: a segfault on exit after valid output is not a failure.
+						local out = vim.trim(result.stdout or "")
+						vim.schedule(function()
+							if out ~= "" then
+								opts.output_cb({ status = "success", data = out })
+							elseif result.code ~= 0 then
+								opts.output_cb({
+									status = "error",
+									data = ("vectorcode failed (exit %d). Ollama and the Chroma server must be running (ai-on)."):format(
+										result.code
+									),
+								})
+							else
+								opts.output_cb({
+									status = "success",
+									data = "No results: this project is not indexed. Use grep_search instead.",
+								})
+							end
+						end)
+					end)
+					if not ran then
+						return { status = "error", data = "vectorcode could not be started: " .. tostring(job) }
+					end
+					opts.register_job(job)
+				end,
+			},
+			schema = {
+				type = "function",
+				["function"] = {
+					name = "semantic_search",
+					description = "Find code by meaning when you don't know exact names, e.g. 'where is auth checked' or 'how are orders saved'. Returns the most relevant files or chunks with their paths. For exact names or strings use grep_search.",
+					parameters = {
+						type = "object",
+						properties = {
+							query = { type = "string", description = "What to look for, in plain words." },
+							count = { type = "number", description = "Number of results, 1-10. Default 5." },
+						},
+						required = { "query" },
+					},
+				},
+			},
+			output = {
+				cmd_string = function(self)
+					return self.args.query
+				end,
+				success = function(self, stdout, meta)
+					local out = vim.iter(stdout or {}):flatten():join("\n")
+					meta.tools.chat:add_tool_output(
+						self,
+						"<semanticSearchTool>\n" .. out .. "\n</semanticSearchTool>",
+						("Semantic search for `%s`"):format(self.args.query)
+					)
+				end,
+				error = function(self, stderr, meta)
+					local err = vim.iter(stderr or {}):flatten():join("\n")
+					meta.tools.chat:add_tool_output(self, "semantic_search failed: " .. err)
+				end,
+			},
+		}
+	end,
+}
+
+-- Lean tool group for the 9B model (<leader>cg). The built-in `agent` group
+-- sends 10 tool schemas and a long generic prompt, which crowds the 32k
+-- context and makes a small model pick the wrong tool more often. It also
+-- drops the chat system prompt, so the stack-facts rule is repeated here.
+local LOCAL_AGENT_ADAPTER = "ollama_agent_think"
+
+local function local_agent_prompt(_, ctx)
+	return string.format(
+		[[You are a coding agent working in the user's repository through tools.
+
+Workflow:
+1. Find the relevant code first: grep_search or file_search for names, semantic_search for "where is X / how does Y work".
+2. read_file before editing. Never edit a file you have not read in this chat.
+3. Make changes with insert_edit_into_file, not code blocks in your reply. Smallest correct change; keep the existing style.
+4. After editing, check get_diagnostics on the changed files and fix what you broke.
+5. Stop when the task is done and summarise what changed in 1-3 lines.
+
+Rules:
+- One tool call at a time; wait for its result before deciding the next step.
+- Use exact paths from the user or from tool output. Do not guess paths.
+- "Stack facts" rules describe the exact library versions in this project. They override your training data: never fall back to older APIs they mark as wrong.
+- Treat AGENTS.md and .agent_context.md rules as project-specific source material.
+- If something is not confirmed by the files, rules or tool output, say so instead of inventing it.
+- If a task needs a decision only the user can make, use ask_questions.
+
+Working directory: %s. OS: %s. Date: %s.]],
+		ctx.cwd,
+		ctx.os,
+		ctx.date
+	)
 end
 
 -- Stack cheat sheets (ai/rules/*.md): the local model's training predates
@@ -389,6 +523,28 @@ Rules:
 			end,
 
 			tools = {
+				semantic_search = semantic_search_tool,
+				groups = {
+					local_agent = {
+						description = "Local agent - lean tool set for the local Qwen model",
+						system_prompt = local_agent_prompt,
+						tools = {
+							"ask_questions",
+							"file_search",
+							"get_diagnostics",
+							"grep_search",
+							"insert_edit_into_file",
+							"read_file",
+							"run_command",
+							"semantic_search",
+						},
+						opts = {
+							collapse_tools = true,
+							ignore_system_prompt = true,
+							ignore_tool_system_prompt = true,
+						},
+					},
+				},
 				opts = {
 					auto_submit_errors = true,
 					auto_submit_success = true,
@@ -475,6 +631,7 @@ Rules:
 
 		http = {
 			ollama_agent = ollama_adapter("Qwen3.5 Agent", 0.2),
+			ollama_agent_think = ollama_adapter("Qwen3.5 Agent (thinking)", 0.2, true),
 			ollama_inline = ollama_adapter("Qwen3.5 Inline", 0.1),
 		},
 	},
@@ -497,6 +654,21 @@ map("n", "<leader>cn", function()
 		vim.cmd("CodeCompanionChat")
 	end
 end, { desc = "New AI chat (current backend)" })
+
+-- Local agent chat: thinking adapter + the lean local_agent tool group.
+-- Always local (Claude Code is already an agent: <leader>ct, <leader>cn).
+-- Type the task and submit; it reads, edits and checks files itself.
+map("n", "<leader>cg", function()
+	if not ollama_running() then
+		notify("🔒 Local AI is OFF — run ai-on.", vim.log.levels.WARN)
+		return
+	end
+	codecompanion.chat({ params = { adapter = LOCAL_AGENT_ADAPTER } })
+	local chat = codecompanion.last_chat()
+	if chat then
+		chat.tool_registry:add("local_agent")
+	end
+end, { desc = "New local agent chat (tools)" })
 
 map("n", "<leader>cs", "<cmd>AiStatus<cr>", { desc = "AI backend status" })
 

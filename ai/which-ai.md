@@ -7,6 +7,8 @@
 - "Where is X?" in a project (`RAG:` in chat, `llm-rag-query`)
 - Private code, or no internet
 - Stack sheet loads by itself in Next.js / Shopify projects
+- Small agent tasks (`<leader>cg`): it finds, reads, edits and checks files
+  itself. Keep it to 1–2 files and give exact names/paths when you know them
 
 ## Claude — switch with `<leader>ct`, then `<leader>cn` for a new chat
 - Changes across many files, or a new feature end to end
