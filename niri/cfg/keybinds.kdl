@@ -15,7 +15,7 @@ binds {
     Mod+G hotkey-overlay-title="Open Browser: Google Chrome" { spawn "google-chrome-stable"; }
     Mod+D hotkey-overlay-title="Open Dolphin: Dolphin" { spawn "dolphin"; }
     Mod+B hotkey-overlay-title="Open Blanket: Blanket" { spawn "blanket"; }
-    Mod+A hotkey-overlay-title="Open ArtCraft: ArtCraft Launcher" { spawn "/home/rjaybernardo/Applications/artcraft-launcher-0.3.2-linux-x86_64.AppImage"; }
+    Mod+A hotkey-overlay-title="Open ArtCraft: ArtCraft Launcher" { spawn-sh "f=$(ls -v ~/Applications/artcraft-launcher-*.AppImage 2>/dev/null | tail -n1); [ -n \"$f\" ] && exec \"$f\" || notify-send -a ArtCraft 'ArtCraft launcher not found' 'No artcraft-launcher-*.AppImage in ~/Applications'"; }
     Ctrl+Shift+P hotkey-overlay-title="Screenshot: Select Area" { screenshot; }
 
 
