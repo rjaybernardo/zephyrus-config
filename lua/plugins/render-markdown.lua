@@ -11,7 +11,7 @@ render_markdown.setup({
 	render_modes = { "n", "c", "t" },
 	file_types = { "markdown", "codecompanion" },
 	code = {
-		style = "minimal",
+		style = "normal",
 		left_pad = 0,
 		right_pad = 0,
 		border = "thin",
