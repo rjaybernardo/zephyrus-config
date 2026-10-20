@@ -124,6 +124,13 @@ fi
 
 
 # =========================================================
+# LAYERLING (local offline copy)
+# =========================================================
+
+alias layerling-update='(cd ~/.local/share/layerling && git checkout -- package-lock.json && git pull && npm install && npm run export && systemctl --user restart layerling)'
+
+
+# =========================================================
 # ZOXIDE
 # =========================================================
 
