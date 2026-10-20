@@ -100,6 +100,7 @@ widget_order = [ "lockscreen-login-box@eDP-1", "lockscreen-login-box@eDP-2" ]
 [shell]
 font_family = "JetBrains Mono"
 lang = "en"
+time_format = "{:%I:%M %p}"
 
 [theme]
 builtin = "Nord"
@@ -158,3 +159,6 @@ show_label = false
 
 [widget.wallpaper]
 enabled = false
+
+[widget.clock]
+format = "{:%I:%M %p}"
