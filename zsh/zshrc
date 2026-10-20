@@ -131,6 +131,26 @@ alias layerling-update='(cd ~/.local/share/layerling && git checkout -- package-
 
 
 # =========================================================
+# ARTCRAFT LAUNCHER (AppImage in ~/Applications, Mod+A)
+# =========================================================
+
+# Fetches the latest launcher release and removes older AppImages.
+artcraft-update() {
+    (
+        cd ~/Applications || exit
+        gh release download -R storytold/craft-launcher --skip-existing \
+            -p 'artcraft-launcher-*-linux-x86_64.AppImage' || exit
+        new=$(command ls -v artcraft-launcher-*-linux-x86_64.AppImage | tail -n1)
+        chmod +x "$new"
+        for f in artcraft-launcher-*.AppImage; do
+            [ "$f" = "$new" ] || rm -- "$f"
+        done
+        echo "ArtCraft launcher: $new"
+    )
+}
+
+
+# =========================================================
 # ZOXIDE
 # =========================================================
 
