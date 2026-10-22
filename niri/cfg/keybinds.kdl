@@ -5,7 +5,8 @@ binds {
     // ─── noctalia-shell keybinds ───
     // https://docs.noctalia.dev/getting-started/keybinds/
 
-    Mod+Shift+ESCAPE { show-hotkey-overlay; }
+    Mod+Shift+Slash { show-hotkey-overlay; }
+    Mod+Slash hotkey-overlay-title="My Shell Commands (cmds)" { spawn-sh "ghostty --gtk-single-instance=false --class=com.rjay.cmds --title='My commands' -e sh -c 'COLUMNS=$(tput cols) python3 ~/Documents/automation/zsh_commands.py | less -R'"; }
 
     // ─── Applications ───
     Mod+T hotkey-overlay-title="Open Terminal: Ghostty" { spawn "ghostty"; }

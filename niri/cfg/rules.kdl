@@ -63,4 +63,10 @@ window-rule {
     open-maximized true
 }
 
-
+// Floating window for the Mod+/ command list (cmds).
+window-rule {
+    match app-id=r#"^com\.rjay\.cmds$"#
+    open-floating true
+    default-column-width { fixed 1000; }
+    default-window-height { fixed 850; }
+}
