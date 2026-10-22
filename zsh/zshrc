@@ -127,6 +127,7 @@ fi
 # LAYERLING (local offline copy)
 # =========================================================
 
+#: Update the local Layerling copy and restart its service
 alias layerling-update='(cd ~/.local/share/layerling && git checkout -- package-lock.json && git pull && npm install && npm run export && systemctl --user restart layerling)'
 
 
@@ -221,14 +222,19 @@ export OPENAI_MODEL="$AI_MODEL"
 # =========================================================
 
 # Chroma (VectorCode RAG, :8100) rides along: useless without Ollama embeddings, so not started at login (battery)
+#: Start Ollama + Chroma (VectorCode RAG DB)
 alias ai-on="systemctl start ollama && systemctl --user start vectorcode-chroma"
+#: Stop Ollama + Chroma
 alias ai-off="systemctl stop ollama; systemctl --user stop vectorcode-chroma"
 alias ai-restart="systemctl restart ollama"
 alias ai-status="systemctl status ollama --no-pager"
 
 # CPU boost (off = cooler: AI answers ~69°C vs 92°C, -3% speed; see system/cpu-boost)
+#: CPU boost off: cooler (~69°C vs 92°C under AI load), ~3% slower
 alias boost-off='echo 0 | sudo tee /sys/devices/system/cpu/cpufreq/boost >/dev/null && echo "boost OFF (cool)"'
+#: CPU boost on: faster but hot (run boost-off when done)
 alias boost-on='echo 1 | sudo tee /sys/devices/system/cpu/cpufreq/boost >/dev/null && echo "boost ON (fast, hot) — boost-off when done"'
+#: Show whether CPU boost is on
 alias boost-status='[[ $(cat /sys/devices/system/cpu/cpufreq/boost) == 1 ]] && echo "boost ON" || echo "boost OFF"'
 
 alias ollama-list="ollama list"
@@ -239,6 +245,7 @@ alias ollama-ps="ollama ps"
 # OLLAMA GPU STATUS
 # =========================================================
 
+#: Show loaded Ollama models and NVIDIA GPU usage
 ollama-gpu() {
     echo "============================================================"
     echo "OLLAMA"
@@ -271,6 +278,7 @@ ollama-gpu() {
 # Ollama is managed by systemd, so server-side variables belong
 # in the systemd service rather than only in .zshrc.
 
+#: Write Ollama systemd overrides (flash attention, q8 KV cache, 16k ctx) — sudo
 ai-optimize-service() {
     sudo mkdir -p /etc/systemd/system/ollama.service.d || return 1
 
@@ -342,7 +350,9 @@ _qwen_run() {
     ollama run --think=false "$model" "$@"
 }
 
+#: Chat with local Qwen 3.5 agent model (no thinking)
 qwen() { _qwen_run qwen3.5-agent "$@"; }
+#: Chat with local Qwen 3.5 inline model (no thinking)
 qwen-inline() { _qwen_run qwen3.5-inline "$@"; }
 
 
@@ -357,6 +367,7 @@ alias nvim-chat="nvim +CodeCompanionChat"
 # AI PROJECT AGENTS
 # =========================================================
 
+#: Create AGENTS.md project guidelines in the current folder
 ai-init-agents() {
     if [[ -f "AGENTS.md" ]]; then
         echo "AGENTS.md already exists in current folder."
@@ -379,6 +390,7 @@ EOF
 # AI PROJECT CONTEXT
 # =========================================================
 
+#: Print the project tree as AI context (ai-ctx [dir])
 ai-ctx() {
     local target_dir="${1:-.}"
 
@@ -408,6 +420,7 @@ ai-ctx() {
 }
 
 
+#: Copy ai-ctx output to the clipboard
 ai-ctx-copy() {
     local target_dir="${1:-.}"
 
@@ -479,6 +492,7 @@ _rag_db_up() {
     curl -fsS --max-time 2 "$_RAG_DB_URL/api/v1/heartbeat" >/dev/null 2>&1
 }
 
+#: Install and start the standalone ChromaDB server for VectorCode (:8100)
 rag-db-setup() {
     local chroma_bin="$HOME/.local/share/uv/tools/vectorcode/bin/chroma"
 
@@ -537,6 +551,7 @@ alias rag-db-logs="journalctl --user -u $_RAG_DB_UNIT -n 50 --no-pager"
 # tree-sitter 0.26 is newer than those parsers and segfaults,
 # so it is pinned to 0.25.x.
 
+#: (Re)install VectorCode with pinned tree-sitter versions
 llm-rag-install() {
     uv tool install --reinstall "vectorcode<1.0.0" \
         --python 3.12 \
@@ -610,6 +625,7 @@ _rag_check() {
 # VECTORCODE RAG CONFIGURATION
 # =========================================================
 
+#: Write .vectorcode config + include list for the current repo
 llm-rag-config() {
     local root include_file dir
     root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -699,6 +715,7 @@ EOF
 # llm-rag-index            -> index everything in vectorcode.include
 # llm-rag-index app lib    -> index only the given folders
 
+#: Index the repo for RAG (llm-rag-index [dir ...])
 llm-rag-index() {
     _rag_check || return 1
 
@@ -765,6 +782,7 @@ llm-rag-index() {
 # =========================================================
 # Use after changing embedding model / config.
 
+#: Drop and rebuild the RAG index (after model/config changes)
 llm-rag-reset() {
     _rag_check || return 1
 
@@ -780,6 +798,7 @@ llm-rag-reset() {
 # VECTORCODE STATUS
 # =========================================================
 
+#: Show VectorCode collections and index status
 llm-rag-status() {
     command -v vectorcode >/dev/null 2>&1 || { echo "VectorCode is not installed."; return 1; }
 
@@ -802,6 +821,7 @@ llm-rag-status() {
 # VECTORCODE HYBRID RAG
 # =========================================================
 
+#: Ask a question with VectorCode + ripgrep context (llm-rag-query <question>)
 llm-rag-query() {
     if [[ $# -eq 0 ]]; then
         echo "Usage: llm-rag-query <question>"
@@ -1025,6 +1045,7 @@ export AIDER_MAP_MULTIPLIER_NO_FILES=1
 # AIDER LOCAL
 # =========================================================
 
+#: Start aider on the local model with AGENTS.md / context.md
 aider-local() {
     local context_files=()
 
@@ -1060,7 +1081,9 @@ aider-local() {
 # Do NOT define aider-watch() or aider-diff() functions.
 
 # $(_ai_sheet_read) adds the stack cheat sheet (--read <sheet>) when one fits.
+#: aider on the local model, watching files for AI comments
 alias aider-watch='aider --model "ollama_chat/$AI_MODEL" $(_ai_sheet_read) --watch-files'
+#: aider on the local model, showing diffs
 alias aider-diff='aider --model "ollama_chat/$AI_MODEL" $(_ai_sheet_read) --show-diffs'
 
 
@@ -1099,6 +1122,7 @@ fi
 # It respects the existing ai-on / ai-off switch.
 # =========================================================
 
+#: Generate/refresh .agent_context.md for the current git repo
 ua() {
     local root context_dir context_file fingerprint_file lock_dir
     local tmp prompt output model
@@ -1352,3 +1376,20 @@ EOF
 
 # Setup claude default
 export CLAUDE_MODEL="claude-haiku-4-5"
+
+# =========================================================
+# AUTOMATION (~/Documents/automation)
+# =========================================================
+
+# CachyOS auto clean (cleanup = interactive, cleanup -y = all, cleanup -n = dry run)
+alias cleanup="python3 ~/Documents/automation/cachy_clean.py"
+
+# Downloads sorter (sortdl = sort now, -n = dry run, --history = past runs, --undo [N] = undo a run)
+alias sortdl="python3 ~/Documents/automation/sort_downloads.py"
+alias sortdl-logs="journalctl --user -u sort-downloads -n 50 --no-pager"
+
+alias updates="python3 ~/Documents/automation/update_check.py -p"   # pending updates + new Arch news
+alias diskcheck="python3 ~/Documents/automation/disk_check.py -p"   # disk usage vs warning threshold
+alias cs="python3 ~/Documents/automation/claude_session.py"          # cs list | save <proj> | resume <proj> [goal] | new <path> | open <proj>
+alias timers="systemctl --user list-timers --no-pager"               # when each automation runs next
+alias cmds="python3 ~/Documents/automation/zsh_commands.py"          # list my aliases/functions (cmds <word> to filter, -w for definitions)
