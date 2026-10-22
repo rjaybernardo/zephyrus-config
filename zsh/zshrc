@@ -1381,17 +1381,15 @@ export CLAUDE_MODEL="claude-haiku-4-5"
 # AUTOMATION (~/Documents/automation)
 # =========================================================
 
-# CachyOS auto clean (cleanup = interactive, cleanup -y = all, cleanup -n = dry run)
+# CachyOS clean (cleanup = interactive, -y = all, -n = dry run, --auto = no-sudo part only)
 alias cleanup="python3 ~/Documents/automation/cachy_clean.py"
 
 # Downloads sorter (sortdl = sort now, -n = dry run, --history = past runs, --undo [N] = undo a run)
 alias sortdl="python3 ~/Documents/automation/sort_downloads.py"
-alias sortdl-logs="journalctl --user -u sort-downloads -n 50 --no-pager"
 
-alias updates="python3 ~/Documents/automation/update_check.py -p"   # pending updates + new Arch news
-alias diskcheck="python3 ~/Documents/automation/disk_check.py -p"   # disk usage vs warning threshold
+alias updates="python3 ~/Documents/automation/update_check.py"      # pending updates + new Arch news
+alias diskcheck="python3 ~/Documents/automation/disk_check.py"      # disk usage, biggest folders if over 85%
 alias cs="python3 ~/Documents/automation/claude_session.py"          # cs list | save <proj> | resume <proj> [goal] | new <path> | open <proj>
-alias timers="systemctl --user list-timers --no-pager"               # when each automation runs next
 alias cmds="python3 ~/Documents/automation/zsh_commands.py"          # list my aliases/functions (cmds <word> to filter, -w for definitions)
 #: Check/repair dotfile symlinks into ~/.config/nvim (dotlink --check, dotlink -n = dry run)
 alias dotlink="~/.config/nvim/link.sh"
