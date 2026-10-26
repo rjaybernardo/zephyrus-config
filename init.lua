@@ -27,6 +27,7 @@ local plugin_modules = {
 	"live-server",
 	"render-markdown",
 	"ai",
+	"esphome",
 	"which-key", -- last, so it sees every mapping
 }
 

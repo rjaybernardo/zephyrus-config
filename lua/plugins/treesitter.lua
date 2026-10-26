@@ -16,6 +16,7 @@ if ok then
 		"yaml", "toml", "dockerfile",
 		"gitcommit", "gitattributes",
 		"python", "cuda",
+		"c", "cpp", -- ESPHome lambdas (injected into YAML), ESP-IDF
 	}
 
 	treesitter.install(languages)

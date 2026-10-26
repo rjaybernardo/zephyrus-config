@@ -16,6 +16,7 @@ wk.add({
 	{ "<leader>c", group = "Code / AI" },
 	{ "<leader>m", group = "Markdown" },
 	{ "<leader>f", group = "Find (Telescope)" },
+	{ "<leader>i", group = "IoT (ESPHome)" },
 	{ "<leader>l", group = "Live Server / LazyGit" },
 	{ "<leader>t", group = "Terminal" },
 	{ "<leader>u", group = "UI Toggles" },

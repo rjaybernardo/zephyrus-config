@@ -2,8 +2,9 @@
 -- LSP, MASON, NAVIC & DIAGNOSTICS
 -- ==========================================================================
 
--- Servers to enable. Mason installs all of these except vtsls and
--- shopify_theme_ls, which are installed separately (npm / Shopify CLI).
+-- Servers to enable. Mason installs all of these except vtsls,
+-- shopify_theme_ls and clangd, which are installed separately
+-- (npm / Shopify CLI / pacman).
 local servers = {
 	"lua_ls",
 	"basedpyright",
@@ -15,6 +16,8 @@ local servers = {
 	"emmet_ls",
 	"shopify_theme_ls",
 	"tailwindcss",
+	"yamlls", -- ESPHome device configs
+	"clangd", -- ESPHome lambdas, ESP-IDF C/C++
 }
 
 local mason_servers = {
@@ -26,6 +29,7 @@ local mason_servers = {
 	"jsonls",
 	"eslint",
 	"tailwindcss",
+	"yamlls",
 }
 
 -- --------------------------------------------------------------------------
@@ -175,6 +179,30 @@ vim.lsp.config("cssls", {
 			validate = true,
 			lint = { unknownAtRules = "ignore" },
 		},
+	},
+})
+
+-- ESPHome YAML uses custom tags; declare them so yamlls doesn't flag
+-- every !secret / !include as an "Unresolved tag" error.
+vim.lsp.config("yamlls", {
+	settings = {
+		yaml = {
+			keyOrdering = false,
+			customTags = {
+				"!secret scalar",
+				"!include scalar",
+				"!include mapping",
+				"!lambda scalar",
+				"!extend scalar",
+				"!remove scalar",
+				"!env_var scalar",
+				"!include_dir_named scalar",
+				"!include_dir_list scalar",
+				"!include_dir_merge_list scalar",
+				"!include_dir_merge_named scalar",
+			},
+		},
+		redhat = { telemetry = { enabled = false } },
 	},
 })
 
