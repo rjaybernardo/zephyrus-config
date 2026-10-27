@@ -161,7 +161,7 @@ binds {
     CTRL+Shift+1 { screenshot; }
     CTRL+Shift+2 { screenshot-screen; }
     CTRL+Shift+3 { screenshot-window; }
-    Mod+Shift+A hotkey-overlay-title="Annotate Screenshot: satty (clipboard image, else newest screenshot)" { spawn-sh "o=~/Pictures/Screenshots/annotated-%Y-%m-%d_%H-%M-%S.png; if wl-paste --list-types | grep -qx image/png; then wl-paste -t image/png | satty -f - -o $o --copy-command wl-copy --early-exit --init-tool arrow; else satty -f \"$(ls -t ~/Pictures/Screenshots/*.png | head -n1)\" -o $o --copy-command wl-copy --early-exit --init-tool arrow; fi"; }
+    Mod+Shift+A hotkey-overlay-title="Annotate Screenshot: satty (clipboard image, else newest screenshot)" { spawn-sh "o=~/Pictures/Screenshots/annotated-%Y-%m-%d_%H-%M-%S.png; if wl-paste --list-types | grep -qx image/png; then wl-paste -t image/png | satty -f - -o $o --copy-command wl-copy --init-tool arrow; else satty -f \"$(ls -t ~/Pictures/Screenshots/*.png | head -n1)\" -o $o --copy-command wl-copy --init-tool arrow; fi"; }
 
     // ─── Emergency Escape Key ───
     Mod+ESCAPE allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
