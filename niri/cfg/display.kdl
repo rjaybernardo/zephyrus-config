@@ -8,6 +8,12 @@
 //     scale 1 // No scaling (use 2 for HiDPI)
 // }
 
+// The built-in screen shows up as eDP-1 or eDP-2 depending on boot; keep both the same.
+output "eDP-1" {
+    mode "2880x1800@60.001"
+    scale 1.5
+}
+
 output "eDP-2" {
     mode "2880x1800@60.001"
     scale 1.5
