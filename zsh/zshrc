@@ -1393,3 +1393,6 @@ alias cs="python3 ~/Documents/automation/claude_session.py"          # cs list |
 alias cmds="python3 ~/Documents/automation/zsh_commands.py"          # list my aliases/functions (cmds <word> to filter, -w for definitions)
 #: Check/repair dotfile symlinks into ~/.config/nvim (dotlink --check, dotlink -n = dry run)
 alias dotlink="~/.config/nvim/link.sh"
+export PATH="$HOME/bin:$PATH"
+# Private keys (not in git)
+[[ -f "$HOME/.zshrc.secrets" ]] && source "$HOME/.zshrc.secrets"
