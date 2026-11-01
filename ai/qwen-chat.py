@@ -6,6 +6,8 @@ A reply too long for the screen switches to a line counter while it's written.
 
   qwen-chat.py MODEL             interactive chat
   qwen-chat.py MODEL "question"  one answer, then exit
+  qwen-chat.py MODEL --last      continue the most recent saved chat
+  qwen-chat.py MODEL --resume F  continue the saved chat in file F
   /clear forgets the conversation, /bye or Ctrl+D quits, Ctrl+C stops a reply.
   Each code block gets a Copy button (Ctrl+click). /c copies the last reply's
   code too; /c 2 copies its block 2.
@@ -180,6 +182,28 @@ def save_chat(path, model, started, messages):
         print(f"{DIM}(couldn't save the chat: {e}){RESET}")
 
 
+def load_chat(path):
+    """Read a saved chat back: its start time and messages (the ## You / ## Qwen sections)."""
+    with open(path) as f:
+        text = f.read()
+    m = re.search(r"^\*.*? · (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) · ", text, re.M)
+    started = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M") if m else datetime.now()
+    parts = re.split(r"^## (You|Qwen)\n\n", text, flags=re.M)
+    messages = [
+        {"role": "user" if who == "You" else "assistant", "content": body.strip()}
+        for who, body in zip(parts[1::2], parts[2::2])
+    ]
+    return started, messages
+
+
+def latest_chat():
+    try:
+        files = [os.path.join(CHATS_DIR, f) for f in os.listdir(CHATS_DIR) if f.endswith(".md")]
+    except OSError:
+        files = []
+    return max(files, key=os.path.getmtime, default=None)
+
+
 def ask():
     """One prompt; a line of just triple quotes starts/ends a multi-line message."""
     first = input("\033[1;36m>>>\033[0m ")
@@ -199,7 +223,18 @@ def main():
     prune_saved()
 
     try:
-        if len(sys.argv) > 2:
+        if len(sys.argv) > 2 and sys.argv[2] in ("--last", "--resume"):
+            path = latest_chat() if sys.argv[2] == "--last" else " ".join(sys.argv[3:])
+            if not path or not os.path.isfile(path):
+                sys.exit("qwen: no saved chat to continue" + (f" ({path})" if path else ""))
+            started, messages = load_chat(path)
+            if messages and messages[-1]["role"] == "assistant":
+                last = messages[-1]["content"]
+            title = os.path.basename(path)[:-3]
+            print(f"{DIM}continuing {title} ({len(messages) // 2} earlier questions) — last answer:{RESET}")
+            if last:
+                render(last)
+        elif len(sys.argv) > 2:
             messages = [{"role": "user", "content": " ".join(sys.argv[2:])}]
             messages.append({"role": "assistant", "content": answer(model, messages)})
             save_chat(chat_path(messages[0]["content"]), model, started, messages)

@@ -355,21 +355,28 @@ _qwen_run() {
     fi
 }
 
-#: Chat with local Qwen 3.5 agent (styled replies, Ctrl+click Copy on code, chats saved)
+#: Chat with local Qwen 3.5 agent (styled, Ctrl+click Copy, chats saved; qwen --last continues the last chat)
 qwen() { _qwen_run qwen3.5-agent "$@"; }
 #: Chat with local Qwen 3.5 inline model (same chat, focused code-change answers)
 qwen-inline() { _qwen_run qwen3.5-inline "$@"; }
-#: Browse saved qwen chats (Enter reads, Ctrl+E opens in nvim)
+#: Browse saved qwen chats (Enter reads, Ctrl+R continues the chat, Ctrl+E opens in nvim)
 qwen-chats() {
     local dir=${QWEN_CHATS:-$HOME/Documents/qwen-chats}
     local style="$HOME/.config/nvim/ai/glow-style.json"
     [[ -d $dir ]] && [[ -n $(command ls -A "$dir") ]] || { echo "No saved chats yet ($dir)."; return; }
-    local file
-    file=$(cd "$dir" && command ls -t -- *.md | fzf --prompt="chat> " \
+    local pick key file
+    pick=$(cd "$dir" && command ls -t -- *.md | fzf --prompt="chat> " \
+        --header="Enter read · Ctrl+R continue · Ctrl+E nvim" \
         --preview "CLICOLOR_FORCE=1 glow -s '$style' -w \$FZF_PREVIEW_COLUMNS {}" \
         --preview-window=right,65% \
+        --expect=ctrl-r \
         --bind "ctrl-e:execute(nvim {})") || return
-    glow -p -s "$style" "$dir/$file"
+    key=${pick%%$'\n'*} file=${pick#*$'\n'}
+    if [[ $key == ctrl-r ]]; then
+        qwen --resume "$dir/$file"
+    else
+        glow -p -s "$style" "$dir/$file"
+    fi
 }
 
 
