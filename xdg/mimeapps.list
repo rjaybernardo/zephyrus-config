@@ -85,6 +85,7 @@ video/3gp=vlc.desktop
 video/3gpp=vlc.desktop
 video/3gpp2=vlc.desktop
 x-scheme-handler/mms=vlc.desktop
+x-scheme-handler/qwen-copy=qwen-copy.desktop
 x-scheme-handler/mmsh=vlc.desktop
 x-scheme-handler/rtsp=vlc.desktop
 x-scheme-handler/rtmp=vlc.desktop

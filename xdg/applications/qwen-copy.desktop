@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=qwen copy code
+Comment=Copy button for code blocks in the qwen chat
+Exec=/home/rjaybernardo/.config/nvim/ai/qwen-copy %u
+MimeType=x-scheme-handler/qwen-copy;
+NoDisplay=true
+Terminal=false

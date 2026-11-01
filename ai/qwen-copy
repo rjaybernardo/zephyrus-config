@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Handler for qwen-copy://<id> links: the Copy buttons in the qwen chat.
+# qwen-chat.py saves each code block to $XDG_RUNTIME_DIR/qwen-copy/<id>;
+# clicking the button opens the link, and this copies that file to the clipboard.
+id=${1#qwen-copy:}
+id=${id#//}
+id=${id%/}
+[[ $id =~ ^[0-9]+-[0-9]+$ ]] || exit 1
+file="${XDG_RUNTIME_DIR:-/run/user/$UID}/qwen-copy/$id"
+if [[ ! -f $file ]]; then
+    notify-send -t 3000 "qwen" "That code block is no longer saved"
+    exit 1
+fi
+wl-copy < "$file"
+notify-send -t 1500 "qwen" "Code copied"

@@ -7,7 +7,8 @@ A reply too long for the screen switches to a line counter while it's written.
   qwen-chat.py MODEL             interactive chat
   qwen-chat.py MODEL "question"  one answer, then exit
   /clear forgets the conversation, /bye or Ctrl+D quits, Ctrl+C stops a reply.
-  /copy (or /c) copies the code block from the last reply; /c 2 copies block 2.
+  Each code block gets a Copy button (Ctrl+click). /c copies the last reply's
+  code too; /c 2 copies its block 2.
 """
 
 import json
@@ -17,10 +18,15 @@ import readline  # noqa: F401  (arrow keys + history in input())
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 
 HOST = os.environ.get("OLLAMA_API_BASE", "http://127.0.0.1:11434")
 DIM, RESET = "\033[2m", "\033[0m"
+STYLE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "glow-style.json")
+# Code blocks behind the Copy buttons; ai/qwen-copy reads them when one is clicked.
+SAVE_DIR = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "qwen-copy")
+saved = 0
 
 
 def cols():
@@ -38,11 +44,54 @@ def screen_lines(text):
 
 
 def render(text):
-    if shutil.which("glow"):
-        width = str(min(cols() - 2, 100))
-        subprocess.run(["glow", "-s", "auto", "-w", width, "-"], input=text.encode())
-    else:
+    """Print the reply styled by glow, with a Copy button above each code block."""
+    blocks = code_blocks(text)
+    if not shutil.which("glow"):
         print(text)
+        return
+    marked, ids = text, [save_block(b) for b in blocks]
+    if ids:
+        n = iter(range(len(ids)))
+        marked = FENCE.sub(lambda m: f"{m.group(1)}QWENCOPY{next(n)}\n\n{m.group(0)}", text)
+    style = STYLE if os.path.isfile(STYLE) else "dark"
+    width = str(min(cols() - 2, 100))
+    out = subprocess.run(
+        ["glow", "-s", style, "-w", width, "-"],
+        input=marked.encode(), capture_output=True, env={**os.environ, "CLICOLOR_FORCE": "1"},
+    ).stdout.decode(errors="replace")
+    out = TRAILING.sub("", out)  # glow pads lines with spaces; drop them so mouse copy is clean
+    for i, block_id in enumerate(ids):
+        out = out.replace(f"QWENCOPY{i}", button(block_id), 1)
+    sys.stdout.write(out)
+
+
+TRAILING = re.compile(r"(?:\033\[[0-9;]*m| )+$", re.M)
+
+
+def save_block(code):
+    global saved
+    saved += 1
+    block_id = f"{os.getpid()}-{saved}"
+    os.makedirs(SAVE_DIR, mode=0o700, exist_ok=True)
+    with open(os.path.join(SAVE_DIR, block_id), "w") as f:
+        f.write(code + "\n")
+    return block_id
+
+
+def button(block_id):
+    """A clickable (OSC 8 link) Copy label; ai/qwen-copy handles qwen-copy:// links."""
+    return f"\033]8;;qwen-copy://{block_id}\033\\\033[38;5;232;48;5;39;1m ⧉ Copy \033[0m\033]8;;\033\\"
+
+
+def prune_saved():
+    """Forget code blocks saved more than a day ago."""
+    try:
+        for name in os.listdir(SAVE_DIR):
+            path = os.path.join(SAVE_DIR, name)
+            if time.time() - os.path.getmtime(path) > 86400:
+                os.remove(path)
+    except OSError:
+        pass
 
 
 FENCE = re.compile(r"^([ \t]*)(`{3,}|~{3,})[^\n]*\n(.*?)^[ \t]*\2[ \t]*$", re.M | re.S)
@@ -58,33 +107,12 @@ def code_blocks(text):
     return blocks
 
 
-def label_blocks(text):
-    """Put a "code N" tag above each block (display only) when there's more than one."""
-    if len(code_blocks(text)) < 2:
-        return text
-    n = 0
-
-    def tag(m):
-        nonlocal n
-        n += 1
-        return f"{m.group(1)}*code {n} — /c {n}*\n\n{m.group(0)}"
-
-    return FENCE.sub(tag, text)
-
-
 def copy(text):
     for cmd in (["wl-copy"], ["xclip", "-selection", "clipboard"]):
         if shutil.which(cmd[0]):
             subprocess.run(cmd, input=text.encode())
             return True
     return False
-
-
-def copy_hint(blocks):
-    if len(blocks) == 1:
-        print(f"{DIM}/c copies the code{RESET}")
-    elif blocks:
-        print(f"{DIM}{len(blocks)} code blocks: /c 1 … /c {len(blocks)} copies one{RESET}")
 
 
 def stream(model, messages):
@@ -119,8 +147,7 @@ def answer(model, messages):
         sys.stdout.write(f"\033[{shown - 1}F")
     sys.stdout.write("\r\033[J")
     sys.stdout.flush()
-    render(label_blocks(reply))
-    copy_hint(code_blocks(reply))
+    render(reply)
     return reply
 
 
@@ -139,6 +166,7 @@ def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     model, messages, last = sys.argv[1], [], ""
+    prune_saved()
 
     try:
         if len(sys.argv) > 2:

@@ -24,6 +24,7 @@ LINKS=(
     "fastfetch/config.jsonc:.config/fastfetch/config.jsonc"
     "xdg/mimeapps.list:.config/mimeapps.list"
     "xdg/xdg-terminals.list:.config/xdg-terminals.list"
+    "xdg/applications/qwen-copy.desktop:.local/share/applications/qwen-copy.desktop"
     "ollama/Modelfile.agent:.config/ollama/Modelfile.agent"
     "ollama/Modelfile.inline:.config/ollama/Modelfile.inline"
     "vectorcode/config.json:.config/vectorcode/config.json"
@@ -108,6 +109,9 @@ if (( ${#uncovered[@]} )); then
 fi
 
 (( units )) && systemctl --user daemon-reload && echo "reloaded systemd user units"
+# the desktop portal (Ghostty link clicks) only sees new .desktop handlers after this
+[[ $mode == install ]] && command -v update-desktop-database >/dev/null \
+    && update-desktop-database "$HOME/.local/share/applications"
 
 echo
 case $mode in
