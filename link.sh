@@ -34,7 +34,7 @@ LINKS=(
 )
 
 # repo files that are used in place, not linked (the nvim config itself, sudo scripts, ...)
-NOT_LINKED=(lua/ init.lua nvim-pack-lock.json system/ packages/ ai/ .gitignore .editorconfig link.sh)
+NOT_LINKED=(lua/ queries/ init.lua nvim-pack-lock.json system/ packages/ ai/ .gitignore .editorconfig link.sh)
 
 mode=install
 case ${1:-} in
