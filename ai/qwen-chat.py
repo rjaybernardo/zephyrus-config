@@ -9,6 +9,7 @@ A reply too long for the screen switches to a line counter while it's written.
   /clear forgets the conversation, /bye or Ctrl+D quits, Ctrl+C stops a reply.
   Each code block gets a Copy button (Ctrl+click). /c copies the last reply's
   code too; /c 2 copies its block 2.
+  Every chat is saved as markdown in $QWEN_CHATS (default ~/Documents/qwen-chats).
 """
 
 import json
@@ -19,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import time
+from datetime import datetime
 import urllib.request
 
 HOST = os.environ.get("OLLAMA_API_BASE", "http://127.0.0.1:11434")
@@ -27,6 +29,7 @@ STYLE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "glow-style.js
 # Code blocks behind the Copy buttons; ai/qwen-copy reads them when one is clicked.
 SAVE_DIR = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "qwen-copy")
 saved = 0
+CHATS_DIR = os.path.expanduser(os.environ.get("QWEN_CHATS", "~/Documents/qwen-chats"))
 
 
 def cols():
@@ -151,6 +154,32 @@ def answer(model, messages):
     return reply
 
 
+def chat_path(first_question):
+    """A new file for a chat: date, time and the first words of the question."""
+    slug = re.sub(r"[^a-z0-9]+", "-", first_question.lower())[:40].strip("-") or "chat"
+    path = os.path.join(CHATS_DIR, f"{datetime.now():%Y-%m-%d_%H%M}-{slug}.md")
+    n = 2
+    while os.path.exists(path):
+        path = os.path.join(CHATS_DIR, f"{datetime.now():%Y-%m-%d_%H%M}-{slug}-{n}.md")
+        n += 1
+    return path
+
+
+def save_chat(path, model, started, messages):
+    """Rewrite the chat file after every reply, so nothing is lost if the window closes."""
+    title = " ".join(messages[0]["content"].split())[:80]
+    parts = [f"# {title}\n\n*{model} · {started:%Y-%m-%d %H:%M} · {os.getcwd()}*\n"]
+    for m in messages:
+        who = "You" if m["role"] == "user" else "Qwen"
+        parts.append(f"## {who}\n\n{m['content'].strip()}\n")
+    try:
+        os.makedirs(CHATS_DIR, exist_ok=True)
+        with open(path, "w") as f:
+            f.write("\n".join(parts))
+    except OSError as e:
+        print(f"{DIM}(couldn't save the chat: {e}){RESET}")
+
+
 def ask():
     """One prompt; a line of just triple quotes starts/ends a multi-line message."""
     first = input("\033[1;36m>>>\033[0m ")
@@ -166,11 +195,14 @@ def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     model, messages, last = sys.argv[1], [], ""
+    path, started = None, datetime.now()
     prune_saved()
 
     try:
         if len(sys.argv) > 2:
-            answer(model, [{"role": "user", "content": " ".join(sys.argv[2:])}])
+            messages = [{"role": "user", "content": " ".join(sys.argv[2:])}]
+            messages.append({"role": "assistant", "content": answer(model, messages)})
+            save_chat(chat_path(messages[0]["content"]), model, started, messages)
             return
         print(f"{DIM}{model} — /c copies code, /clear starts over, /bye quits{RESET}")
         while True:
@@ -184,7 +216,7 @@ def main():
             if text in ("/bye", "/exit", "/quit"):
                 break
             if text == "/clear":
-                messages = []
+                messages, path, started = [], None, datetime.now()
                 print(f"{DIM}(conversation cleared){RESET}")
                 continue
             if text.split()[0] in ("/c", "/copy"):
@@ -202,6 +234,8 @@ def main():
             messages.append({"role": "user", "content": text})
             last = answer(model, messages)
             messages.append({"role": "assistant", "content": last})
+            path = path or chat_path(messages[0]["content"])
+            save_chat(path, model, started, messages)
     except EOFError:
         print()
     except (OSError, RuntimeError) as e:

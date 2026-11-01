@@ -359,6 +359,18 @@ _qwen_run() {
 qwen() { _qwen_run qwen3.5-agent "$@"; }
 #: Chat with local Qwen 3.5 inline model (no thinking)
 qwen-inline() { _qwen_run qwen3.5-inline "$@"; }
+#: Browse saved qwen chats (Enter reads, Ctrl+E opens in nvim)
+qwen-chats() {
+    local dir=${QWEN_CHATS:-$HOME/Documents/qwen-chats}
+    local style="$HOME/.config/nvim/ai/glow-style.json"
+    [[ -d $dir ]] && [[ -n $(command ls -A "$dir") ]] || { echo "No saved chats yet ($dir)."; return; }
+    local file
+    file=$(cd "$dir" && command ls -t -- *.md | fzf --prompt="chat> " \
+        --preview "CLICOLOR_FORCE=1 glow -s '$style' -w \$FZF_PREVIEW_COLUMNS {}" \
+        --preview-window=right,65% \
+        --bind "ctrl-e:execute(nvim {})") || return
+    glow -p -s "$style" "$dir/$file"
+}
 
 
 # =========================================================
