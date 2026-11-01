@@ -355,9 +355,9 @@ _qwen_run() {
     fi
 }
 
-#: Chat with local Qwen 3.5 agent model (no thinking)
+#: Chat with local Qwen 3.5 agent (styled replies, Ctrl+click Copy on code, chats saved)
 qwen() { _qwen_run qwen3.5-agent "$@"; }
-#: Chat with local Qwen 3.5 inline model (no thinking)
+#: Chat with local Qwen 3.5 inline model (same chat, focused code-change answers)
 qwen-inline() { _qwen_run qwen3.5-inline "$@"; }
 #: Browse saved qwen chats (Enter reads, Ctrl+E opens in nvim)
 qwen-chats() {
