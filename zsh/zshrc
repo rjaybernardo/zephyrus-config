@@ -347,7 +347,12 @@ _qwen_run() {
         fi
         model=$name
     fi
-    ollama run --think=false "$model" "$@"
+    # In a terminal, chat with replies styled by glow; piped, stay plain text.
+    if [[ -t 0 && -t 1 ]]; then
+        python3 "$HOME/.config/nvim/ai/qwen-chat.py" "$model" "$@"
+    else
+        ollama run --think=false "$model" "$@"
+    fi
 }
 
 #: Chat with local Qwen 3.5 agent model (no thinking)
